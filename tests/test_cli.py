@@ -5,21 +5,21 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from prumo import __version__
-from prumo.cli import app
-from prumo.commands import create as create_command
-from prumo.deployment.model import WorkflowTechnology
-from prumo.generators.process import GenerationError
-from prumo.node import NodePrerequisiteError
-from prumo.prerequisites import Toolchain
-from prumo.project.config import (
+from jabuti import __version__
+from jabuti.cli import app
+from jabuti.commands import create as create_command
+from jabuti.deployment.model import WorkflowTechnology
+from jabuti.generators.process import GenerationError
+from jabuti.node import NodePrerequisiteError
+from jabuti.prerequisites import Toolchain
+from jabuti.project.config import (
     Backend,
     Database,
     Frontend,
     MigrationStrategy,
     ProjectType,
 )
-from prumo.project.planner import ComponentPlan, ProjectPlan
+from jabuti.project.planner import ComponentPlan, ProjectPlan
 
 runner = CliRunner()
 
@@ -41,7 +41,7 @@ def configure_menu_selections(
         prompts.append((message, values))
         return value
 
-    monkeypatch.setattr("prumo.commands.prompts.select_option", choose)
+    monkeypatch.setattr("jabuti.commands.prompts.select_option", choose)
     return prompts
 
 
@@ -76,7 +76,7 @@ def fake_environment(
 ) -> Path:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "prumo.commands.create.check_prerequisites",
+        "jabuti.commands.create.check_prerequisites",
         lambda _plan: Toolchain(),
     )
     for framework in (*Frontend, *Backend):
@@ -84,7 +84,7 @@ def fake_environment(
     return tmp_path
 
 
-def test_help_displays_prumo_presentation() -> None:
+def test_help_displays_jabuti_presentation() -> None:
     result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0
@@ -96,7 +96,7 @@ def test_version_displays_current_version() -> None:
     result = runner.invoke(app, ["version"])
 
     assert result.exit_code == 0
-    assert result.output == f"Prumo {__version__}\n"
+    assert result.output == f"Jabuti {__version__}\n"
 
 
 @pytest.mark.parametrize(
@@ -176,7 +176,7 @@ def test_missing_tool_stops_before_creating_files(
         raise NodePrerequisiteError("Node.js não encontrado.")
 
     monkeypatch.setattr(
-        "prumo.commands.create.check_prerequisites",
+        "jabuti.commands.create.check_prerequisites",
         fail_prerequisite_check,
     )
 

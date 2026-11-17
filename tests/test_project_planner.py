@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from prumo.deployment.workflows import WorkflowConfigurationError, render_workflows
-from prumo.project.config import (
+from jabuti.deployment.workflows import WorkflowConfigurationError, render_workflows
+from jabuti.project.config import (
     Backend,
     Database,
     Frontend,
@@ -12,7 +12,7 @@ from prumo.project.config import (
     ProjectConfig,
     ProjectType,
 )
-from prumo.project.planner import (
+from jabuti.project.planner import (
     ProjectTargetExistsError,
     create_project_structure,
     plan_project,

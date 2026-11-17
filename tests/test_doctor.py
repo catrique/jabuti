@@ -1,10 +1,10 @@
 import pytest
 from typer.testing import CliRunner
 
-from prumo import doctor, node, python_runtime
-from prumo.cli import app
-from prumo.doctor import diagnose
-from prumo.project.config import Backend, Frontend
+from jabuti import doctor, node, python_runtime
+from jabuti.cli import app
+from jabuti.doctor import diagnose
+from jabuti.project.config import Backend, Frontend
 
 
 def fake_environment(

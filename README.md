@@ -1,10 +1,10 @@
-# Prumo
+# Jabuti
 
-Prumo é um CLI que cria e padroniza projetos de software: frontends, APIs,
+Jabuti é um CLI que cria e padroniza projetos de software: frontends, APIs,
 projetos fullstack e aplicações web integradas, já com `AGENTS.md`, `README.md`,
 `.gitignore` e workflows de deploy do GitHub Actions.
 
-O Prumo prepara e padroniza projetos; ele não administra a máquina do
+O Jabuti prepara e padroniza projetos; ele não administra a máquina do
 desenvolvedor. Ferramentas do sistema são verificadas, nunca instaladas.
 
 ## Instalação
@@ -12,24 +12,38 @@ desenvolvedor. Ferramentas do sistema são verificadas, nunca instaladas.
 Requer Python 3.11 ou superior.
 
 ```bash
-pipx install prumo     # quando o pacote estiver publicado
-pipx install .         # a partir de um clone deste repositório
+git clone https://github.com/catrique/jabuti.git
+cd jabuti
+pip install .
+```
+
+Instalação diretamente do GitHub:
+
+```bash
+pip install git+https://github.com/catrique/jabuti.git
+```
+
+Após a publicação no PyPI:
+
+```bash
+pip install jabuti
+pipx install jabuti
 ```
 
 ## Uso
 
 ```bash
-prumo --help
-prumo version
-prumo doctor
-prumo create
+jabuti --help
+jabuti version
+jabuti doctor
+jabuti create
 ```
 
-### `prumo doctor`
+### `jabuti doctor`
 
 Diagnostica o ambiente local sem alterar nada: mostra as versões de Python,
 Node.js, npm e Git e quais stacks podem ser criadas, usando as mesmas regras
-de versão do `prumo create`. Retorna código 1 quando algo está ausente ou
+de versão do `jabuti create`. Retorna código 1 quando algo está ausente ou
 incompatível.
 
 | Stack | Precisa de |
@@ -38,7 +52,7 @@ incompatível.
 | Angular | Node.js 22.22.3+ ou 24.15+ e npm (CLI oficial via `npm exec`) |
 | FastAPI, Flask | Python 3.10+ (cada projeto recebe sua própria `.venv`) |
 
-### `prumo create`
+### `jabuti create`
 
 Menus navegáveis por setas e Enter, perguntando só o que é relevante:
 
@@ -49,7 +63,7 @@ Menus navegáveis por setas e Enter, perguntando só o que é relevante:
 | Fullstack | React ou Angular + FastAPI ou Express | `frontend/` e `backend/` independentes |
 | Aplicação web | Flask (Jinja), Express (EJS) | backend serve o HTML e os estáticos |
 
-- **Banco:** MySQL opcional onde há backend. O Prumo gera a configuração por
+- **Banco:** MySQL opcional onde há backend. O Jabuti gera a configuração por
   variáveis de ambiente e um `.env.example`, mas não instala MySQL, não cria
   banco ou usuário e nunca gera credenciais nem `.env` real.
 - **Migrations:** Alembic, para FastAPI e Flask com MySQL. Express ainda não

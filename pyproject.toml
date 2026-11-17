@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "prumo"
+name = "jabuti"
 dynamic = ["version"]
 description = "CLI para criação e padronização de projetos de software"
 readme = "README.md"
@@ -27,18 +27,23 @@ dependencies = [
     "typer>=0.27,<1",
 ]
 
+[project.urls]
+Homepage = "https://github.com/catrique/jabuti"
+Repository = "https://github.com/catrique/jabuti"
+Issues = "https://github.com/catrique/jabuti/issues"
+
 [project.scripts]
-prumo = "prumo.cli:app"
+jabuti = "jabuti.cli:app"
 
 [tool.setuptools.dynamic]
-version = { attr = "prumo.__version__" }
+version = { attr = "jabuti.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 # Templates are package resources read through importlib.resources.
 [tool.setuptools.package-data]
-prumo = ["templates/**/*.tpl"]
+jabuti = ["templates/**/*.tpl"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"
@@ -53,4 +58,4 @@ target-version = "py311"
 select = ["E", "F", "I"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["prumo"]
+known-first-party = ["jabuti"]

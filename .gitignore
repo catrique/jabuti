@@ -21,3 +21,5 @@ dist/
 .env.*
 !.env.example
 !.env.*.example
+
+.context-compress/

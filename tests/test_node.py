@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from prumo import node
-from prumo.node import (
+from jabuti import node
+from jabuti.node import (
     NodePrerequisiteError,
     detect_node_toolchain,
     is_node_version_compatible,

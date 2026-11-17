@@ -1,6 +1,6 @@
 import pytest
 
-from prumo.project.config import (
+from jabuti.project.config import (
     Backend,
     Database,
     Frontend,

@@ -4,8 +4,8 @@ from typing import Any
 
 import pytest
 
-from prumo.generators import react
-from prumo.generators.react import (
+from jabuti.generators import react
+from jabuti.generators.react import (
     ReactDependencyInstallError,
     ReactScaffoldError,
     generate_react_project,
