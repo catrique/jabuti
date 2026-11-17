@@ -2,11 +2,8 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import PurePosixPath
 
 from jabuti.project.config import MigrationStrategy
-
-DEPLOY_ROOT = PurePosixPath("/srv/apps")
 
 _SEPARATED_BACKEND_SUFFIX = "-api"
 
@@ -46,9 +43,13 @@ class DeploymentTarget:
     migrations: MigrationStrategy = MigrationStrategy.NONE
 
     @property
-    def server_path(self) -> PurePosixPath:
-        """Directory where the application is published on the server."""
-        return DEPLOY_ROOT / self.app_name
+    def server_path(self) -> str:
+        """Publication directory, relative to the DEPLOY_ROOT GitHub variable.
+
+        The real base directory belongs to the server and is never written by
+        Jabuti; workflows read it from ``vars.DEPLOY_ROOT``.
+        """
+        return f"<DEPLOY_ROOT>/{self.app_name}"
 
     @property
     def deploy_workflow(self) -> str:

@@ -29,8 +29,10 @@ Este arquivo orienta agentes de código que trabalham no repositório Jabuti.
 - O planner é a fonte de verdade de diretórios e alvos de deploy; workflows são
   gerados somente a partir de `DeploymentTarget`.
 - Regras de nomes não podem ser duplicadas: o backend de um fullstack separado
-  é sempre `<repo>-api` (`separated_backend_app_name`) e o diretório base de
-  deploy existe apenas em `DEPLOY_ROOT`.
+  é sempre `<repo>-api` (`separated_backend_app_name`).
+- Workflows gerados nunca contêm caminhos, usuários ou hosts de servidor: o
+  diretório base e o usuário vêm de `${{ vars.DEPLOY_ROOT }}` e
+  `${{ vars.DEPLOY_USER }}`, validados por `resolve-target.sh.tpl`.
 - O Jabuti nunca gera credenciais nem cria `.env` real.
 - Migrations nunca executam automaticamente; seus workflows são manuais.
 - Subprocessos usam lista de argumentos, sem shell e sem `os.system`.

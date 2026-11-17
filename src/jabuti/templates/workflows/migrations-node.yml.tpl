@@ -1,10 +1,15 @@
 name: %%WORKFLOW_NAME%%
 
+# Migrations nunca rodam automaticamente: este workflow é somente manual.
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+env:
+  APP: '%%APP%%'
+  DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
 
 concurrency:
   group: migrate-%%APP%%
@@ -14,15 +19,31 @@ jobs:
   migrate:
     runs-on: [self-hosted, Linux, X64]
 
+    defaults:
+      run:
+        shell: bash
+
     steps:
-      - name: Verificar ambiente
-        working-directory: %%SERVER_PATH%%
+      - name: Validar configuração
         run: |
+%%RESOLVE_TARGET%%
+
+          [ -d "$deploy_target" ] || {
+            echo "Aplicação $APP ainda não publicada. Execute o deploy antes." >&2
+            exit 1
+          }
+
+          echo "Destino de deploy validado."
+
+      - name: Verificar ambiente
+        run: |
+          cd -- "$DEPLOY_TARGET"
           node --version
           npm --version
           test -f package.json
           test -d node_modules
 
       - name: Aplicar migrations
-        working-directory: %%SERVER_PATH%%
-        run: npm run migrar
+        run: |
+          cd -- "$DEPLOY_TARGET"
+          npm run migrar

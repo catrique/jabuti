@@ -111,6 +111,29 @@ def migration_components(components: Iterable[ComponentPlan]) -> list[ComponentP
     return [c for c in components if c.migrations is not MigrationStrategy.NONE]
 
 
+DEPLOY_VARIABLES_LOCATION = (
+    "**Settings → Secrets and variables → Actions → Variables**"
+)
+DEPLOY_VARIABLES = (
+    (
+        "DEPLOY_ROOT",
+        "Required. Base directory where the applications are published on the "
+        "server. It must be an existing absolute path; the workflows fail "
+        "without it and never fall back to a default.",
+    ),
+    (
+        "DEPLOY_USER",
+        "Optional. User that owns the PM2 processes. Leave it empty when the "
+        "runner already runs as the correct user.",
+    ),
+)
+
+
+def deploy_variable_lines() -> list[str]:
+    """GitHub Actions Variables read by the generated workflows."""
+    return [f"`{name}`: {description}" for name, description in DEPLOY_VARIABLES]
+
+
 def deployment_lines(target: DeploymentTarget) -> list[str]:
     """Workflow variables and server destination of a deployment target."""
     lines = [

@@ -1,12 +1,14 @@
 """README.md generated from the project plan."""
 
 from jabuti.documentation.markdown import (
+    DEPLOY_VARIABLES_LOCATION,
     architecture_description,
     bullets,
     code_block,
     command_lines,
     component_title,
     database_components,
+    deploy_variable_lines,
     deployment_lines,
     environment_components,
     location,
@@ -42,11 +44,12 @@ def structure_lines(plan: ProjectPlan) -> list[str]:
         directories = [f"{directory}/" for directory in plan.directories]
     else:
         directories = list(plan.components[0].stack.source_directories)
+    if plan.config.deploy_workflows:
+        directories.append(f"{WORKFLOWS_DIRECTORY.as_posix()}/")
 
     return [
         f"{plan.root}/",
         *(f"  {entry}" for entry in directories),
-        f"  {WORKFLOWS_DIRECTORY.as_posix()}/",
         "  AGENTS.md",
         "  README.md",
     ]
@@ -91,24 +94,39 @@ def _migrations(plan: ProjectPlan) -> str | None:
         return None
 
     component = components[0]
-    return section(
-        "Migrations",
-        code_block(migration_commands(component)),
-        f"In production, run the `{component.deployment.migrations_workflow}` "
-        "workflow manually. Migrations never run on push.",
-    )
+    if plan.config.deploy_workflows:
+        production = (
+            f"In production, run the `{component.deployment.migrations_workflow}` "
+            "workflow manually. Migrations never run on push."
+        )
+    else:
+        production = "Migrations never run automatically; apply them manually."
+    return section("Migrations", code_block(migration_commands(component)), production)
 
 
-def _deployment(plan: ProjectPlan) -> str:
+def _deployment(plan: ProjectPlan) -> str | None:
+    if not plan.config.deploy_workflows:
+        return None
+
     blocks = [
         section(component_title(c), bullets(deployment_lines(c.deployment)), level=3)
         for c in plan.components
     ]
-    paragraphs = ["GitHub Actions on a self-hosted Linux X64 runner.", *blocks]
+    paragraphs = [
+        "GitHub Actions on a self-hosted Linux X64 runner. Server settings are "
+        "not stored in this repository: the workflows read them from GitHub "
+        "Actions Variables.",
+        f"Create these variables in {DEPLOY_VARIABLES_LOCATION}:",
+        bullets(deploy_variable_lines()),
+        "Each application is published to `<DEPLOY_ROOT>/<APP>`. A `.env` "
+        "already on the server is preserved; local `.env` files are never "
+        "published.",
+        *blocks,
+    ]
     if plan.config.topology is Topology.SEPARATED:
         frontend, backend = plan.components
         paragraphs.append(
             f"Frontend server name: `{frontend.deployment.app_name}`  \n"
             f"Backend server name: `{backend.deployment.app_name}`"
         )
-    return section("Deployment", *paragraphs)
+    return section("Deploy", *paragraphs)

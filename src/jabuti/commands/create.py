@@ -104,7 +104,10 @@ def _generate(plan: ProjectPlan, project_root: Path, tools: Toolchain) -> None:
         )
         raise typer.Exit(code=1) from None
 
-    typer.echo("[OK] Workflows, README.md, AGENTS.md e .gitignore gerados")
+    generated = "README.md, AGENTS.md e .gitignore"
+    if plan.config.deploy_workflows:
+        generated = f"Workflows de deploy, {generated}"
+    typer.echo(f"[OK] {generated} gerados")
 
 
 def _show_success(plan: ProjectPlan) -> None:

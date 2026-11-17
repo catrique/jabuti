@@ -43,6 +43,9 @@ def _fields(plan: ProjectPlan) -> list[tuple[str, str]]:
         fields.append(("Banco", config.database.value))
     if config.database is not Database.NONE:
         fields.append(("Migrations", config.migrations.value))
+    if not config.deploy_workflows:
+        fields.append(("Deploy", "Não gerar workflows"))
+        return fields
     for component in plan.components:
         scope = component.deployment.scope
         label = f"Deploy {scope}" if scope else "Deploy"

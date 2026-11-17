@@ -107,6 +107,7 @@ class ProjectConfig:
     backend: Backend | None = None
     database: Database = Database.NONE
     migrations: MigrationStrategy = MigrationStrategy.NONE
+    deploy_workflows: bool = True
 
     def __post_init__(self) -> None:
         validate_project_name(self.name)

@@ -43,6 +43,13 @@ _OFFERED_MIGRATIONS = {
 }
 
 
+class DeployWorkflows(StrEnum):
+    """Answer to whether deploy workflows should be generated."""
+
+    YES = "Sim"
+    NO = "Não"
+
+
 class PromptCancelled(RuntimeError):
     """Raised when the user cancels an interactive menu."""
 
@@ -83,6 +90,10 @@ def prompt_project_config() -> ProjectConfig:
     backend = _prompt_backend(project_type)
     database = _prompt_database(backend)
     migrations = _prompt_migrations(backend, database)
+    deploy_workflows = select_option(
+        "Deseja gerar workflows de deploy?",
+        tuple((option.value, option) for option in DeployWorkflows),
+    )
 
     try:
         return ProjectConfig(
@@ -92,6 +103,7 @@ def prompt_project_config() -> ProjectConfig:
             backend=backend,
             database=database,
             migrations=migrations,
+            deploy_workflows=deploy_workflows is DeployWorkflows.YES,
         )
     except ProjectConfigError as error:
         typer.echo(f"Configuração inválida: {error}", err=True)

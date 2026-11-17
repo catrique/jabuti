@@ -69,15 +69,34 @@ Menus navegáveis por setas e Enter, perguntando só o que é relevante:
 - **Migrations:** Alembic, para FastAPI e Flask com MySQL. Express ainda não
   tem mecanismo de migrations no scaffold.
 
+- **Deploy:** ao final, o `jabuti create` pergunta se deve gerar os workflows
+  de deploy. Respondendo "Não", o projeto é criado normalmente, sem
+  `.github/workflows/` (nem workflows de migrations).
+
 ## Deploy gerado
 
-Os workflows publicam em um runner self-hosted Linux X64, no diretório
-`/srv/apps/<APP>`.
+Os workflows publicam em um runner self-hosted Linux X64. Eles conhecem apenas
+o que pertence ao projeto (`APP`, `SRC`, `TIPO` e, no Angular, `OUT`). O que
+pertence ao servidor nunca é gravado nos arquivos gerados: vem de GitHub
+Actions Variables, configuradas em cada repositório em **Settings → Secrets and
+variables → Actions → Variables**.
+
+| Variável | Uso |
+| --- | --- |
+| `DEPLOY_ROOT` | Obrigatória. Diretório base, absoluto e já existente, onde as aplicações são publicadas. Sem ela o workflow falha antes de alterar qualquer coisa. |
+| `DEPLOY_USER` | Opcional. Usuário dono dos processos PM2. Vazia, o PM2 roda como o próprio usuário do runner; preenchida com outro usuário, é usado `sudo -n -u`. |
+
+Cada aplicação é publicada em `$DEPLOY_ROOT/<APP>`:
 
 | Projeto | Workflows | APP no servidor |
 | --- | --- | --- |
 | Aplicação única | `deploy.yml` (+ `migrations.yml`) | `<repo>` |
 | Fullstack | `deploy-frontend.yml`, `deploy-backend.yml` (+ `migrations-backend.yml`) | frontend `<repo>`, backend `<repo>-api` |
+
+Antes de publicar, o workflow valida `DEPLOY_ROOT` (absoluto, existente, sem
+`.`/`..`, sem link simbólico, diferente de `/` e do home), `APP` (um único nome
+seguro) e confirma que o destino fica dentro de `DEPLOY_ROOT`. O `.env` do
+servidor é preservado e arquivos `.env` do repositório nunca são publicados.
 
 No fullstack, cada lado tem seu próprio deploy, disparado só por mudanças na
 sua pasta. Migrations nunca rodam no push: seus workflows são manuais

@@ -1,3 +1,4 @@
+import re
 from dataclasses import replace
 from pathlib import Path
 
@@ -47,7 +48,7 @@ def test_separated_backend_is_published_as_repository_api() -> None:
         "backend",
         "sentinel-api",
     )
-    assert str(backend.deployment.server_path) == "/srv/apps/sentinel-api"
+    assert backend.deployment.server_path == "<DEPLOY_ROOT>/sentinel-api"
     assert frontend.database is Database.NONE
     assert frontend.migrations is MigrationStrategy.NONE
 
@@ -106,8 +107,31 @@ def test_fullstack_workflows_publish_each_side_to_its_own_app() -> None:
     assert "TIPO: 'python'" in backend
     assert "'!backend/migrations/**'" in backend
     migrations = workflows["migrations-backend.yml"]
-    assert "working-directory: /srv/apps/sentinel-api" in migrations
+    assert "APP: 'sentinel-api'" in migrations
+    assert "DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}" in migrations
+    assert "working-directory" not in migrations
     assert "push:" not in migrations
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        REACT,
+        ProjectConfig("portal", ProjectType.FRONTEND, frontend=Frontend.ANGULAR),
+        ProjectConfig("portal-rh", ProjectType.API, backend=Backend.EXPRESS),
+        SENTINEL,
+    ],
+)
+def test_workflows_read_server_settings_from_github_variables(
+    config: ProjectConfig,
+) -> None:
+    for name, content in rendered_workflows(config).items():
+        assert "${{ vars.DEPLOY_ROOT }}" in content, name
+        assert "/opt/" not in content, name
+        assert "%%" not in content, name
+        # Any other user is only reachable through the DEPLOY_USER variable.
+        for command in re.findall(r"sudo .*", content):
+            assert '-u "$DEPLOY_USER"' in command, (name, command)
 
 
 def test_angular_workflow_receives_build_output() -> None:

@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 from jabuti import __version__
 from jabuti.cli import app
 from jabuti.commands import create as create_command
+from jabuti.commands.prompts import DeployWorkflows
 from jabuti.deployment.model import WorkflowTechnology
 from jabuti.generators.process import GenerationError
 from jabuti.node import NodePrerequisiteError
@@ -99,20 +100,24 @@ def test_version_displays_current_version() -> None:
     assert result.output == f"Jabuti {__version__}\n"
 
 
+YES = DeployWorkflows.YES
+FULLSTACK_ALEMBIC = (
+    ProjectType.FULLSTACK,
+    Frontend.REACT,
+    Backend.FASTAPI,
+    Database.MYSQL,
+    MigrationStrategy.ALEMBIC,
+)
+
+
 @pytest.mark.parametrize(
     ("selections", "workflows"),
     [
-        ((ProjectType.FRONTEND, Frontend.REACT), {"deploy.yml"}),
-        ((ProjectType.FRONTEND, Frontend.ANGULAR), {"deploy.yml"}),
-        ((ProjectType.API, Backend.EXPRESS, Database.NONE), {"deploy.yml"}),
+        ((ProjectType.FRONTEND, Frontend.REACT, YES), {"deploy.yml"}),
+        ((ProjectType.FRONTEND, Frontend.ANGULAR, YES), {"deploy.yml"}),
+        ((ProjectType.API, Backend.EXPRESS, Database.NONE, YES), {"deploy.yml"}),
         (
-            (
-                ProjectType.FULLSTACK,
-                Frontend.REACT,
-                Backend.FASTAPI,
-                Database.MYSQL,
-                MigrationStrategy.ALEMBIC,
-            ),
+            (*FULLSTACK_ALEMBIC, YES),
             {"deploy-frontend.yml", "deploy-backend.yml", "migrations-backend.yml"},
         ),
         (
@@ -121,6 +126,7 @@ def test_version_displays_current_version() -> None:
                 Backend.FLASK,
                 Database.MYSQL,
                 MigrationStrategy.ALEMBIC,
+                YES,
             ),
             {"deploy.yml", "migrations.yml"},
         ),
@@ -139,10 +145,28 @@ def test_created_project_has_agents_readme_and_planned_workflows(
     project = fake_environment / "portal"
     assert result.exit_code == 0, result.output
     assert (project / "AGENTS.md").is_file()
-    assert (project / "README.md").is_file()
+    assert "DEPLOY_ROOT" in (project / "README.md").read_text(encoding="utf-8")
     assert ".env" in (project / ".gitignore").read_text(encoding="utf-8")
     generated = {path.name for path in (project / ".github" / "workflows").iterdir()}
     assert generated == workflows
+
+
+def test_project_without_deploy_has_no_workflows(
+    fake_environment: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure_menu_selections(monkeypatch, (*FULLSTACK_ALEMBIC, DeployWorkflows.NO))
+
+    result = runner.invoke(app, ["create"], input="portal\ny\n")
+
+    project = fake_environment / "portal"
+    assert result.exit_code == 0, result.output
+    assert not (project / ".github").exists()
+    assert (project / "backend" / "alembic.ini").is_file()
+    for document in ("README.md", "AGENTS.md"):
+        content = (project / document).read_text(encoding="utf-8")
+        assert "DEPLOY_ROOT" not in content
+        assert ".github/workflows" not in content
 
 
 def test_frontend_does_not_ask_backend_or_database(
@@ -151,7 +175,7 @@ def test_frontend_does_not_ask_backend_or_database(
 ) -> None:
     prompts = configure_menu_selections(
         monkeypatch,
-        (ProjectType.FRONTEND, Frontend.REACT),
+        (ProjectType.FRONTEND, Frontend.REACT, YES),
     )
 
     result = runner.invoke(app, ["create"], input="portal\nn\n")
@@ -160,6 +184,7 @@ def test_frontend_does_not_ask_backend_or_database(
     assert [message for message, _options in prompts] == [
         "O que você quer criar?",
         "Framework:",
+        "Deseja gerar workflows de deploy?",
     ]
     assert "Operação cancelada." in result.output
     assert not (fake_environment / "portal").exists()
@@ -170,7 +195,7 @@ def test_missing_tool_stops_before_creating_files(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    configure_menu_selections(monkeypatch, (ProjectType.FRONTEND, Frontend.REACT))
+    configure_menu_selections(monkeypatch, (ProjectType.FRONTEND, Frontend.REACT, YES))
 
     def fail_prerequisite_check(_plan: ProjectPlan) -> Toolchain:
         raise NodePrerequisiteError("Node.js não encontrado.")
@@ -191,7 +216,7 @@ def test_generation_failure_is_reported_without_traceback_or_workflows(
     fake_environment: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    configure_menu_selections(monkeypatch, (ProjectType.FRONTEND, Frontend.REACT))
+    configure_menu_selections(monkeypatch, (ProjectType.FRONTEND, Frontend.REACT, YES))
 
     def fail(_component: ComponentPlan, _target: Path, _tools: Toolchain) -> None:
         raise GenerationError("Falha esperada do Vite.")

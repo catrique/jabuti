@@ -1,9 +1,9 @@
 """Turn planned deployment targets into GitHub Actions workflow files."""
 
 import re
+import textwrap
 
 from jabuti.deployment.model import (
-    DEPLOY_ROOT,
     DeploymentScope,
     DeploymentTarget,
     WorkflowTechnology,
@@ -21,6 +21,8 @@ _MIGRATION_TEMPLATES = {
     MigrationStrategy.ALEMBIC: "workflows/migrations-python.yml.tpl",
     MigrationStrategy.NPM_SCRIPT: "workflows/migrations-node.yml.tpl",
 }
+# Indentation of a shell line inside a step's `run: |` block.
+_RUN_INDENT = " " * 10
 
 
 class WorkflowConfigurationError(ValueError):
@@ -74,7 +76,8 @@ def _render_deploy(target: DeploymentTarget) -> str:
             "SRC": target.source,
             "TIPO": target.technology.value,
             "OUT_ENV": output,
-            "DEPLOY_ROOT": str(DEPLOY_ROOT),
+            "LOCKFILE": _source_file(target, "package-lock.json"),
+            "RESOLVE_TARGET": _resolve_target_script(),
         },
     )
 
@@ -85,9 +88,22 @@ def _render_migrations(target: DeploymentTarget) -> str:
         {
             "WORKFLOW_NAME": target.workflow_title("Migrations"),
             "APP": target.app_name,
-            "SERVER_PATH": str(target.server_path),
+            "RESOLVE_TARGET": _resolve_target_script(),
         },
     )
+
+
+def _resolve_target_script() -> str:
+    """Shared shell that validates DEPLOY_ROOT and APP before any change."""
+    script = render_template("workflows/resolve-target.sh.tpl")
+    return textwrap.indent(script, _RUN_INDENT).rstrip("\n")
+
+
+def _source_file(target: DeploymentTarget, name: str) -> str:
+    """Path of a file inside SRC, relative to the repository root."""
+    if target.source == ".":
+        return name
+    return f"{target.source}/{name}"
 
 
 def _push_filter(target: DeploymentTarget) -> str:
