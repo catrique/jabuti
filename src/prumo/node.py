@@ -38,24 +38,43 @@ class NodeToolchain:
     node_version: NodeVersion
 
 
+@dataclass(frozen=True, slots=True)
+class NodeInstallation:
+    """Node.js and npm executables found on PATH, not yet validated."""
+
+    node_executable: Path | None
+    npm_executable: Path | None
+
+
+def locate_node() -> NodeInstallation:
+    """Find the Node.js and npm executables without checking versions."""
+    node_executable = shutil.which("node")
+    npm_executable = _find_npm()
+    return NodeInstallation(
+        node_executable=Path(node_executable) if node_executable else None,
+        npm_executable=Path(npm_executable) if npm_executable else None,
+    )
+
+
 def detect_node_toolchain(
     requirement: NodeRequirement = VITE_REQUIREMENT,
 ) -> NodeToolchain:
     """Locate Node.js and npm and ensure the Node.js version is supported."""
-    node_executable = shutil.which("node")
+    installation = locate_node()
+    node_executable = installation.node_executable
     if node_executable is None:
         raise NodePrerequisiteError(
             f"{requirement.tool} requer Node.js, mas ele não foi encontrado.\n"
             "Instale uma versão compatível do Node.js e execute novamente."
         )
 
-    npm_executable = _find_npm()
+    npm_executable = installation.npm_executable
     if npm_executable is None:
         raise NodePrerequisiteError(
             f"{requirement.tool} requer npm, mas ele não foi encontrado."
         )
 
-    version_output = _read_node_version(node_executable)
+    version_output = read_node_version(node_executable)
     node_version = parse_node_version(version_output)
     if node_version is None:
         raise NodePrerequisiteError(
@@ -73,8 +92,8 @@ def detect_node_toolchain(
         )
 
     return NodeToolchain(
-        node_executable=Path(node_executable),
-        npm_executable=Path(npm_executable),
+        node_executable=node_executable,
+        npm_executable=npm_executable,
         node_version=node_version,
     )
 
@@ -124,7 +143,8 @@ def _find_npm() -> str | None:
     )
 
 
-def _read_node_version(node_executable: str) -> str:
+def read_node_version(node_executable: Path) -> str:
+    """Raw output of node --version."""
     try:
         result = subprocess.run(
             [node_executable, "--version"],

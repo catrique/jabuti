@@ -4,6 +4,7 @@ import typer
 
 from prumo import __version__
 from prumo.commands.create import create
+from prumo.commands.doctor import doctor
 
 app = typer.Typer(
     name="prumo",
@@ -24,3 +25,4 @@ def version() -> None:
 
 
 app.command()(create)
+app.command()(doctor)

@@ -58,7 +58,7 @@ def test_detect_node_toolchain_rejects_unreadable_version(
         "which",
         lambda name: str(Path(name)),
     )
-    monkeypatch.setattr(node, "_read_node_version", lambda _executable: "unknown")
+    monkeypatch.setattr(node, "read_node_version", lambda _executable: "unknown")
 
     with pytest.raises(NodePrerequisiteError, match="interpretar"):
         detect_node_toolchain()

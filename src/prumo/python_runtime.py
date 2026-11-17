@@ -38,11 +38,15 @@ def detect_python() -> PythonInterpreter:
         if version is not None and version >= _MINIMUM_VERSION:
             return PythonInterpreter(Path(executable), version)
 
-    minimum = ".".join(str(part) for part in _MINIMUM_VERSION[:2])
     raise PythonPrerequisiteError(
-        f"Python {minimum}+ é necessário, mas não foi encontrado.\n"
+        f"{python_version_requirement()} é necessário, mas não foi encontrado.\n"
         "Instale uma versão compatível do Python e execute novamente."
     )
+
+
+def python_version_requirement() -> str:
+    """Describe the minimum Python version for generated projects."""
+    return f"Python {'.'.join(str(part) for part in _MINIMUM_VERSION[:2])}+"
 
 
 def format_python_version(version: PythonVersion) -> str:

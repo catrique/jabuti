@@ -15,7 +15,7 @@ from prumo.node import (
 )
 from prumo.project.config import Backend, Framework, Frontend
 from prumo.project.planner import ProjectPlan
-from prumo.project.stacks import Runtime
+from prumo.project.stacks import Runtime, stack_for
 from prumo.python_runtime import (
     PythonInterpreter,
     PythonPrerequisiteError,
@@ -63,16 +63,23 @@ class Toolchain:
         return found
 
 
-def check_prerequisites(plan: ProjectPlan) -> Toolchain:
-    """Verify, without installing anything, the tools each component needs."""
-    node = None
-    for component in plan.components:
-        requirement = _NODE_REQUIREMENTS.get(component.framework)
-        if requirement is not None:
-            node = detect_node_toolchain(requirement)
+def verify_framework_tools(
+    framework: Framework,
+) -> NodeToolchain | PythonInterpreter:
+    """Verify, without installing anything, the tools one framework needs."""
+    if stack_for(framework).runtime is Runtime.PYTHON:
+        return detect_python()
+    return detect_node_toolchain(_NODE_REQUIREMENTS[framework])
 
-    needs_python = any(
-        component.stack.runtime is Runtime.PYTHON for component in plan.components
-    )
-    python = detect_python() if needs_python else None
+
+def check_prerequisites(plan: ProjectPlan) -> Toolchain:
+    """Verify the tools needed by every component of a plan."""
+    node = None
+    python = None
+    for component in plan.components:
+        tools = verify_framework_tools(component.framework)
+        if isinstance(tools, NodeToolchain):
+            node = tools
+        else:
+            python = tools
     return Toolchain(node=node, python=python)
