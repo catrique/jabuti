@@ -22,6 +22,20 @@ Este arquivo orienta agentes de código que trabalham no repositório Prumo.
 - Não faça alterações fora do escopo solicitado.
 - Nunca execute `git push` automaticamente.
 
+## Regras permanentes do Prumo
+
+- Templates são recursos do pacote (`src/prumo/templates/`), lidos com
+  `importlib.resources`; nunca dependa de caminhos do repositório.
+- O planner é a fonte de verdade de diretórios e alvos de deploy; workflows são
+  gerados somente a partir de `DeploymentTarget`.
+- Regras de nomes não podem ser duplicadas: o backend de um fullstack separado
+  é sempre `<repo>-api` (`separated_backend_app_name`) e o diretório base de
+  deploy existe apenas em `DEPLOY_ROOT`.
+- O Prumo nunca gera credenciais nem cria `.env` real.
+- Migrations nunca executam automaticamente; seus workflows são manuais.
+- Subprocessos usam lista de argumentos, sem shell e sem `os.system`.
+- Testes focam comportamentos críticos; evite testes de baixo valor.
+
 ## Fluxo de trabalho com Git
 
 Depois de concluir uma tarefa solicitada:

@@ -3,6 +3,10 @@
 import subprocess
 from pathlib import Path
 
+from prumo.generators.process import GenerationError
+from prumo.prerequisites import Toolchain
+from prumo.project.planner import ComponentPlan
+
 _VITE_CREATE_ARGUMENTS = (
     "create",
     "vite@latest",
@@ -14,12 +18,21 @@ _VITE_CREATE_ARGUMENTS = (
 )
 
 
-class ReactScaffoldError(RuntimeError):
+class ReactScaffoldError(GenerationError):
     """Raised when Vite cannot scaffold the React project."""
 
 
-class ReactDependencyInstallError(RuntimeError):
+class ReactDependencyInstallError(GenerationError):
     """Raised when npm cannot install the React project dependencies."""
+
+
+def generate_react(
+    _component: ComponentPlan,
+    target_directory: Path,
+    tools: Toolchain,
+) -> None:
+    """Generate a planned React component with the existing Vite generator."""
+    generate_react_project(target_directory, tools.npm)
 
 
 def generate_react_project(target_directory: Path, npm_executable: Path) -> None:

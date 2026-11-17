@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 _PROJECT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
-_MAX_PROJECT_NAME_LENGTH = 255
+_MAX_PROJECT_NAME_LENGTH = 100
 _WINDOWS_RESERVED_NAMES = {
     "AUX",
     "CON",
@@ -36,17 +36,20 @@ class Frontend(StrEnum):
     ANGULAR = "Angular"
 
 
-class ApiFramework(StrEnum):
-    """Frameworks intended specifically for APIs."""
+class Backend(StrEnum):
+    """Backend frameworks understood by Prumo."""
 
     FASTAPI = "FastAPI"
     EXPRESS = "Express"
-
-
-class WebFramework(StrEnum):
-    """Frameworks intended for server-side web applications."""
-
     FLASK = "Flask"
+
+
+class Topology(StrEnum):
+    """How the components of a project relate to each other."""
+
+    STANDALONE = "Aplicação única"
+    SEPARATED = "Separada"
+    BACKEND_SERVES_FRONTEND = "Backend serve frontend"
 
 
 class Database(StrEnum):
@@ -56,6 +59,44 @@ class Database(StrEnum):
     MYSQL = "MySQL"
 
 
+class MigrationStrategy(StrEnum):
+    """Schema migration mechanisms understood by Prumo."""
+
+    NONE = "Nenhuma"
+    ALEMBIC = "Alembic"
+    NPM_SCRIPT = "npm run migrar"
+
+
+Framework = Frontend | Backend
+
+PYTHON_BACKENDS = frozenset({Backend.FASTAPI, Backend.FLASK})
+
+BACKENDS_BY_PROJECT_TYPE: dict[ProjectType, tuple[Backend, ...]] = {
+    ProjectType.FRONTEND: (),
+    ProjectType.API: (Backend.FASTAPI, Backend.EXPRESS),
+    ProjectType.FULLSTACK: (Backend.FASTAPI, Backend.EXPRESS),
+    ProjectType.WEB_APP: (Backend.FLASK, Backend.EXPRESS),
+}
+
+MIGRATIONS_BY_BACKEND: dict[Backend, tuple[MigrationStrategy, ...]] = {
+    Backend.FASTAPI: (MigrationStrategy.ALEMBIC,),
+    Backend.FLASK: (MigrationStrategy.ALEMBIC,),
+    Backend.EXPRESS: (MigrationStrategy.NPM_SCRIPT,),
+}
+
+PROJECT_TYPES_WITH_FRONTEND = frozenset({ProjectType.FRONTEND, ProjectType.FULLSTACK})
+
+_TOPOLOGY_BY_PROJECT_TYPE = {
+    ProjectType.FRONTEND: Topology.STANDALONE,
+    ProjectType.API: Topology.STANDALONE,
+    ProjectType.FULLSTACK: Topology.SEPARATED,
+    ProjectType.WEB_APP: Topology.BACKEND_SERVES_FRONTEND,
+}
+
+# Angular CLI only accepts names made of letter-initiated, dash-separated words.
+_ANGULAR_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9]*(-[A-Za-z][A-Za-z0-9]*)*$")
+
+
 @dataclass(frozen=True, slots=True)
 class ProjectConfig:
     """Validated choices for a project."""
@@ -63,14 +104,18 @@ class ProjectConfig:
     name: str
     project_type: ProjectType
     frontend: Frontend | None = None
-    api: ApiFramework | None = None
-    web_framework: WebFramework | None = None
-    database: Database | None = None
+    backend: Backend | None = None
+    database: Database = Database.NONE
+    migrations: MigrationStrategy = MigrationStrategy.NONE
 
     def __post_init__(self) -> None:
         validate_project_name(self.name)
         validate_project_components(self)
 
+    @property
+    def topology(self) -> Topology:
+        """Topology implied by the project type."""
+        return _TOPOLOGY_BY_PROJECT_TYPE[self.project_type]
 
 def validate_project_name(name: str) -> None:
     """Ensure a name is a safe, portable directory name."""
@@ -93,62 +138,48 @@ def validate_project_name(name: str) -> None:
 
 
 def validate_project_components(config: ProjectConfig) -> None:
-    """Ensure that only fields relevant to the project type are populated."""
-    if config.project_type is ProjectType.FRONTEND:
-        if config.frontend is None:
-            raise ProjectConfigError("um projeto frontend exige um framework.")
-        if any((config.api, config.web_framework, config.database)):
-            raise ProjectConfigError("frontend não aceita backend ou banco de dados.")
-        return
+    """Ensure that only choices relevant to the project type are populated."""
+    expects_frontend = config.project_type in PROJECT_TYPES_WITH_FRONTEND
+    if expects_frontend and config.frontend is None:
+        raise ProjectConfigError(f"{config.project_type} exige um frontend.")
+    if not expects_frontend and config.frontend is not None:
+        raise ProjectConfigError(f"{config.project_type} não aceita frontend.")
 
-    if config.project_type is ProjectType.API:
-        if config.api is None or config.database is None:
-            raise ProjectConfigError("uma API exige tecnologia e escolha de banco.")
-        if config.frontend is not None or config.web_framework is not None:
-            raise ProjectConfigError("API não aceita frontend ou aplicação web.")
-        return
-
-    if config.project_type is ProjectType.FULLSTACK:
-        if (
-            config.frontend is None
-            or config.api is None
-            or config.database is None
-        ):
-            raise ProjectConfigError(
-                "fullstack exige frontend, backend/API e escolha de banco."
-            )
-        if config.web_framework is not None:
-            raise ProjectConfigError("fullstack não aceita framework de aplicação web.")
-        return
-
-    if config.web_framework is None or config.database is None:
+    allowed_backends = BACKENDS_BY_PROJECT_TYPE[config.project_type]
+    if allowed_backends and config.backend not in allowed_backends:
         raise ProjectConfigError(
-            "aplicação web exige framework e escolha de banco."
+            f"{config.project_type} exige um destes backends: "
+            f"{', '.join(allowed_backends)}."
         )
-    if config.frontend is not None or config.api is not None:
+    if not allowed_backends and config.backend is not None:
+        raise ProjectConfigError(f"{config.project_type} não aceita backend.")
+
+    if config.backend is None and config.database is not Database.NONE:
+        raise ProjectConfigError("banco de dados exige um backend.")
+
+    _validate_migrations(config)
+
+    if config.frontend is Frontend.ANGULAR:
+        _validate_angular_name(config.name)
+
+
+def _validate_migrations(config: ProjectConfig) -> None:
+    if config.migrations is MigrationStrategy.NONE:
+        return
+
+    if config.database is Database.NONE:
+        raise ProjectConfigError("migrations exigem um banco de dados.")
+
+    supported = MIGRATIONS_BY_BACKEND.get(config.backend, ()) if config.backend else ()
+    if config.migrations not in supported:
         raise ProjectConfigError(
-            "aplicação web não aceita frontend ou API separados."
+            f"{config.migrations} não é suportado com {config.backend}."
         )
 
 
-def unavailable_generators(config: ProjectConfig) -> tuple[str, ...]:
-    """Return selected technologies whose generators are not implemented."""
-    if config.project_type is ProjectType.FRONTEND:
-        return () if config.frontend is Frontend.REACT else (Frontend.ANGULAR.value,)
-
-    if config.project_type is ProjectType.API:
-        return (config.api.value,) if config.api is not None else ()
-
-    if config.project_type is ProjectType.FULLSTACK:
-        unavailable = []
-        if config.frontend is Frontend.ANGULAR:
-            unavailable.append(Frontend.ANGULAR.value)
-        if config.api is not None:
-            unavailable.append(config.api.value)
-        return tuple(unavailable)
-
-    return (
-        (config.web_framework.value,)
-        if config.web_framework is not None
-        else ()
-    )
+def _validate_angular_name(name: str) -> None:
+    if not _ANGULAR_NAME_PATTERN.fullmatch(name):
+        raise ProjectConfigError(
+            "Angular exige nomes formados por palavras separadas por hífen, "
+            "cada uma começando por letra (ex.: portal-rh)."
+        )

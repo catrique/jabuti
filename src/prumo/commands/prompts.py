@@ -1,6 +1,5 @@
 """Interactive menu prompts used by Prumo commands."""
 
-from collections.abc import Callable
 from enum import StrEnum
 from typing import TypeVar, cast
 
@@ -8,26 +7,40 @@ import questionary
 import typer
 
 from prumo.project.config import (
-    ApiFramework,
+    BACKENDS_BY_PROJECT_TYPE,
+    PROJECT_TYPES_WITH_FRONTEND,
+    Backend,
     Database,
     Frontend,
+    MigrationStrategy,
     ProjectConfig,
     ProjectConfigError,
     ProjectType,
-    WebFramework,
     validate_project_name,
 )
 
 MenuValue = TypeVar("MenuValue", bound=StrEnum)
 
-_PROJECT_TYPE_OPTIONS = tuple((option.value, option) for option in ProjectType)
-_FRONTEND_OPTIONS = tuple((option.value, option) for option in Frontend)
-_API_OPTIONS = (
-    ("FastAPI (Python)", ApiFramework.FASTAPI),
-    ("Express (Node.js)", ApiFramework.EXPRESS),
-)
-_WEB_OPTIONS = ((WebFramework.FLASK.value, WebFramework.FLASK),)
-_DATABASE_OPTIONS = tuple((option.value, option) for option in Database)
+_BACKEND_TITLES = {
+    Backend.FASTAPI: "FastAPI (Python)",
+    Backend.EXPRESS: "Express (Node.js)",
+    Backend.FLASK: "Flask (Python)",
+}
+_FRONTEND_MESSAGES = {
+    ProjectType.FRONTEND: "Framework:",
+    ProjectType.FULLSTACK: "Frontend:",
+}
+_BACKEND_MESSAGES = {
+    ProjectType.API: "Backend:",
+    ProjectType.FULLSTACK: "Backend:",
+    ProjectType.WEB_APP: "Framework:",
+}
+# Migrations are offered only where the scaffold creates a working mechanism.
+# Express has no migration library yet, so `npm run migrar` is not offered.
+_OFFERED_MIGRATIONS = {
+    Backend.FASTAPI: MigrationStrategy.ALEMBIC,
+    Backend.FLASK: MigrationStrategy.ALEMBIC,
+}
 
 
 class PromptCancelled(RuntimeError):
@@ -64,63 +77,66 @@ def prompt_project_config() -> ProjectConfig:
     name = _prompt_project_name()
     project_type = select_option(
         "O que você quer criar?",
-        _PROJECT_TYPE_OPTIONS,
+        tuple((option.value, option) for option in ProjectType),
     )
-    builders: dict[ProjectType, Callable[[str], ProjectConfig]] = {
-        ProjectType.FRONTEND: _prompt_frontend_config,
-        ProjectType.API: _prompt_api_config,
-        ProjectType.FULLSTACK: _prompt_fullstack_config,
-        ProjectType.WEB_APP: _prompt_web_app_config,
-    }
+    frontend = _prompt_frontend(project_type)
+    backend = _prompt_backend(project_type)
+    database = _prompt_database(backend)
+    migrations = _prompt_migrations(backend, database)
 
     try:
-        return builders[project_type](name)
+        return ProjectConfig(
+            name=name,
+            project_type=project_type,
+            frontend=frontend,
+            backend=backend,
+            database=database,
+            migrations=migrations,
+        )
     except ProjectConfigError as error:
         typer.echo(f"Configuração inválida: {error}", err=True)
         raise typer.Exit(code=2) from None
 
 
-def _prompt_frontend_config(name: str) -> ProjectConfig:
-    frontend = select_option("Escolha o framework:", _FRONTEND_OPTIONS)
-    return ProjectConfig(
-        name=name,
-        project_type=ProjectType.FRONTEND,
-        frontend=frontend,
+def _prompt_frontend(project_type: ProjectType) -> Frontend | None:
+    if project_type not in PROJECT_TYPES_WITH_FRONTEND:
+        return None
+    return select_option(
+        _FRONTEND_MESSAGES[project_type],
+        tuple((option.value, option) for option in Frontend),
     )
 
 
-def _prompt_api_config(name: str) -> ProjectConfig:
-    api = select_option("Escolha a tecnologia da API:", _API_OPTIONS)
-    database = select_option("Banco de dados:", _DATABASE_OPTIONS)
-    return ProjectConfig(
-        name=name,
-        project_type=ProjectType.API,
-        api=api,
-        database=database,
+def _prompt_backend(project_type: ProjectType) -> Backend | None:
+    backends = BACKENDS_BY_PROJECT_TYPE[project_type]
+    if not backends:
+        return None
+    return select_option(
+        _BACKEND_MESSAGES[project_type],
+        tuple((_BACKEND_TITLES[option], option) for option in backends),
     )
 
 
-def _prompt_fullstack_config(name: str) -> ProjectConfig:
-    frontend = select_option("Frontend:", _FRONTEND_OPTIONS)
-    api = select_option("Backend/API:", _API_OPTIONS)
-    database = select_option("Banco de dados:", _DATABASE_OPTIONS)
-    return ProjectConfig(
-        name=name,
-        project_type=ProjectType.FULLSTACK,
-        frontend=frontend,
-        api=api,
-        database=database,
+def _prompt_database(backend: Backend | None) -> Database:
+    if backend is None:
+        return Database.NONE
+    return select_option(
+        "Banco de dados:",
+        tuple((option.value, option) for option in Database),
     )
 
 
-def _prompt_web_app_config(name: str) -> ProjectConfig:
-    web_framework = select_option("Framework:", _WEB_OPTIONS)
-    database = select_option("Banco de dados:", _DATABASE_OPTIONS)
-    return ProjectConfig(
-        name=name,
-        project_type=ProjectType.WEB_APP,
-        web_framework=web_framework,
-        database=database,
+def _prompt_migrations(
+    backend: Backend | None,
+    database: Database,
+) -> MigrationStrategy:
+    offered = _OFFERED_MIGRATIONS.get(backend) if backend else None
+    if database is Database.NONE or offered is None:
+        return MigrationStrategy.NONE
+    no_migrations = MigrationStrategy.NONE
+    return select_option(
+        "Migrations:",
+        ((offered.value, offered), (no_migrations.value, no_migrations)),
     )
 
 

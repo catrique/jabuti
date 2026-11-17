@@ -1,33 +1,41 @@
 """Interactive project creation command."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 import typer
 
 from prumo.commands.prompts import PromptCancelled, prompt_project_config
-from prumo.generators.react import (
-    ReactDependencyInstallError,
-    ReactScaffoldError,
-    generate_react_project,
-)
-from prumo.node import (
-    NodePrerequisiteError,
-    NodeToolchain,
-    detect_node_toolchain,
-    format_node_version,
-)
-from prumo.project.config import (
-    ProjectConfig,
-    ProjectType,
-    unavailable_generators,
-)
+from prumo.commands.summary import summary_lines
+from prumo.deployment.checks import DeploymentCheckError
+from prumo.deployment.workflows import WorkflowConfigurationError
+from prumo.generators.angular import generate_angular
+from prumo.generators.express import generate_express
+from prumo.generators.fastapi import generate_fastapi
+from prumo.generators.flask import generate_flask
+from prumo.generators.process import GenerationError
+from prumo.generators.react import generate_react
+from prumo.prerequisites import PrerequisiteError, Toolchain, check_prerequisites
+from prumo.project.config import Backend, Framework, Frontend
 from prumo.project.planner import (
+    ComponentPlan,
     ProjectPlan,
     ProjectTargetExistsError,
+    component_directory,
     create_project_structure,
-    frontend_target_directory,
     plan_project,
 )
+from prumo.project.repository import write_repository_files
+
+Generator = Callable[[ComponentPlan, Path, Toolchain], None]
+
+_GENERATORS: dict[Framework, Generator] = {
+    Frontend.REACT: generate_react,
+    Frontend.ANGULAR: generate_angular,
+    Backend.FASTAPI: generate_fastapi,
+    Backend.FLASK: generate_flask,
+    Backend.EXPRESS: generate_express,
+}
 
 
 def create() -> None:
@@ -39,132 +47,70 @@ def create() -> None:
         return
 
     plan = plan_project(config)
-    _show_summary(config)
-    _stop_if_generator_is_unavailable(config)
+    typer.echo()
+    typer.echo("\n".join(summary_lines(plan)))
+    typer.echo()
 
     if not typer.confirm("Continuar?", default=True):
         typer.echo("Operação cancelada.")
         return
 
-    toolchain = _prepare_react_toolchain()
+    tools = _check_prerequisites(plan)
+    project_root = _create_root(plan)
+    _generate(plan, project_root, tools)
+    _show_success(plan)
 
+
+def _check_prerequisites(plan: ProjectPlan) -> Toolchain:
     try:
-        project_root = create_project_structure(plan)
-    except ProjectTargetExistsError as error:
-        typer.echo(str(error), err=True)
-        raise typer.Exit(code=1) from None
-
-    _generate_react(plan, project_root, toolchain)
-    _show_react_success(plan)
-
-
-def _show_summary(config: ProjectConfig) -> None:
-    fields: list[tuple[str, str]] = [
-        ("Nome", config.name),
-        ("Tipo", config.project_type.value),
-    ]
-
-    if config.project_type is ProjectType.FRONTEND:
-        fields.append(("Framework", str(config.frontend)))
-    elif config.project_type is ProjectType.API:
-        fields.extend(
-            (("Backend", str(config.api)), ("Banco", str(config.database)))
-        )
-    elif config.project_type is ProjectType.FULLSTACK:
-        fields.extend(
-            (
-                ("Frontend", str(config.frontend)),
-                ("Backend", str(config.api)),
-                ("Banco", str(config.database)),
-            )
-        )
-    else:
-        fields.extend(
-            (
-                ("Framework", str(config.web_framework)),
-                ("Banco", str(config.database)),
-            )
-        )
-
-    typer.echo("\nProjeto")
-    typer.echo("-" * 28)
-    for label, value in fields:
-        typer.echo(f"{label + ':':<12}{value}")
-    typer.echo()
-
-
-def _stop_if_generator_is_unavailable(config: ProjectConfig) -> None:
-    unavailable = unavailable_generators(config)
-    if not unavailable:
-        return
-
-    if len(unavailable) == 1:
-        message = (
-            f"o gerador {unavailable[0]} ainda não está disponível "
-            "nesta versão do Prumo."
-        )
-    else:
-        technologies = " e ".join(unavailable)
-        message = (
-            f"os geradores {technologies} ainda não estão disponíveis "
-            "nesta versão do Prumo."
-        )
-
-    typer.echo(f"A configuração foi reconhecida, mas {message}", err=True)
-    typer.echo("\nNenhum arquivo foi criado.", err=True)
-    raise typer.Exit(code=1)
-
-
-def _prepare_react_toolchain() -> NodeToolchain:
-    try:
-        toolchain = detect_node_toolchain()
-    except NodePrerequisiteError as error:
+        tools = check_prerequisites(plan)
+    except PrerequisiteError as error:
         typer.echo(str(error), err=True)
         typer.echo("\nNenhum arquivo foi criado.", err=True)
         raise typer.Exit(code=1) from None
 
-    typer.echo(
-        f"[OK] Node.js encontrado ({format_node_version(toolchain.node_version)})"
-    )
-    typer.echo("[OK] npm encontrado")
-    return toolchain
+    for tool in tools.describe():
+        typer.echo(f"[OK] {tool}")
+    return tools
 
 
-def _generate_react(
-    plan: ProjectPlan,
-    project_root: Path,
-    toolchain: NodeToolchain,
-) -> None:
-    target_directory = frontend_target_directory(plan, project_root)
-
+def _create_root(plan: ProjectPlan) -> Path:
     try:
-        generate_react_project(target_directory, toolchain.npm_executable)
-    except ReactScaffoldError as error:
+        return create_project_structure(plan)
+    except ProjectTargetExistsError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(code=1) from None
+
+
+def _generate(plan: ProjectPlan, project_root: Path, tools: Toolchain) -> None:
+    """Generate every component, then the repository files that depend on them."""
+    try:
+        for component in plan.components:
+            generator = _GENERATORS[component.framework]
+            generator(component, component_directory(component, project_root), tools)
+            typer.echo(f"[OK] {component.framework} criado")
+
+        write_repository_files(plan, project_root)
+    except (
+        GenerationError,
+        DeploymentCheckError,
+        WorkflowConfigurationError,
+    ) as error:
         typer.echo(str(error), err=True)
         typer.echo(
-            "A estrutura inicial foi mantida e npm install não foi executado.",
+            f"\nA criação foi interrompida. Os arquivos gerados até aqui foram "
+            f"mantidos em '{plan.root}' para inspeção.",
             err=True,
         )
         raise typer.Exit(code=1) from None
-    except ReactDependencyInstallError as error:
-        typer.echo(str(error), err=True)
-        typer.echo(
-            f"Execute npm install em '{_frontend_relative_path(plan)}' "
-            "para tentar novamente.",
-            err=True,
-        )
-        raise typer.Exit(code=1) from None
 
-    typer.echo("[OK] Projeto React criado")
-    typer.echo("[OK] Dependências instaladas")
+    typer.echo("[OK] Workflows, README.md, AGENTS.md e .gitignore gerados")
 
 
-def _show_react_success(plan: ProjectPlan) -> None:
+def _show_success(plan: ProjectPlan) -> None:
     typer.echo("\nProjeto criado com sucesso.")
-    typer.echo("\nPara iniciar:")
-    typer.echo(f"cd {_frontend_relative_path(plan)}")
-    typer.echo("npm run dev")
-
-
-def _frontend_relative_path(plan: ProjectPlan) -> Path:
-    return frontend_target_directory(plan, Path(plan.root))
+    for component in plan.components:
+        directory = Path(plan.root, component.directory).as_posix()
+        typer.echo(f"\nPara iniciar {component.framework}:")
+        typer.echo(f"cd {directory}")
+        typer.echo(component.stack.run_command)

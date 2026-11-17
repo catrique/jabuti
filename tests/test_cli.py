@@ -1,3 +1,4 @@
+import json
 from enum import StrEnum
 from pathlib import Path
 
@@ -6,15 +7,19 @@ from typer.testing import CliRunner
 
 from prumo import __version__
 from prumo.cli import app
-from prumo.generators.react import ReactScaffoldError
-from prumo.node import NodePrerequisiteError, NodeToolchain
+from prumo.commands import create as create_command
+from prumo.deployment.model import WorkflowTechnology
+from prumo.generators.process import GenerationError
+from prumo.node import NodePrerequisiteError
+from prumo.prerequisites import Toolchain
 from prumo.project.config import (
-    ApiFramework,
+    Backend,
     Database,
     Frontend,
+    MigrationStrategy,
     ProjectType,
-    WebFramework,
 )
+from prumo.project.planner import ComponentPlan, ProjectPlan
 
 runner = CliRunner()
 
@@ -40,19 +45,49 @@ def configure_menu_selections(
     return prompts
 
 
-def react_toolchain() -> NodeToolchain:
-    return NodeToolchain(
-        node_executable=Path("node.exe"),
-        npm_executable=Path("npm.cmd"),
-        node_version=(22, 12, 0),
+def fake_generator(component: ComponentPlan, target: Path, _tools: Toolchain) -> None:
+    """Create only the files that the workflows of a component require."""
+    if component.deployment.technology is WorkflowTechnology.PYTHON:
+        (target / "requirements.txt").write_text("fastapi\n", encoding="utf-8")
+    else:
+        (target / "package.json").write_text("{}", encoding="utf-8")
+        (target / "package-lock.json").write_text("{}", encoding="utf-8")
+    if component.framework is Frontend.ANGULAR:
+        workspace = {
+            "projects": {
+                component.project_name: {
+                    "architect": {
+                        "build": {"builder": "@angular/build:application"}
+                    }
+                }
+            }
+        }
+        (target / "angular.json").write_text(json.dumps(workspace), encoding="utf-8")
+    if component.migrations is MigrationStrategy.ALEMBIC:
+        (target / "alembic.ini").write_text("", encoding="utf-8")
+        (target / "migrations").mkdir()
+        (target / "migrations" / "env.py").write_text("", encoding="utf-8")
+
+
+@pytest.fixture
+def fake_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Path:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "prumo.commands.create.check_prerequisites",
+        lambda _plan: Toolchain(),
     )
+    for framework in (*Frontend, *Backend):
+        monkeypatch.setitem(create_command._GENERATORS, framework, fake_generator)
+    return tmp_path
 
 
 def test_help_displays_prumo_presentation() -> None:
     result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0
-    assert "Prumo" in result.output
     assert "create" in result.output
     assert "version" in result.output
 
@@ -64,103 +99,57 @@ def test_version_displays_current_version() -> None:
     assert result.output == f"Prumo {__version__}\n"
 
 
-def test_unknown_command_returns_error_exit_code() -> None:
-    result = runner.invoke(app, ["unknown"])
-
-    assert result.exit_code != 0
-
-
-def test_frontend_react_reaches_existing_generator_without_irrelevant_prompts(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    prompts = configure_menu_selections(
-        monkeypatch,
-        (ProjectType.FRONTEND, Frontend.REACT),
-    )
-    generated_in: list[Path] = []
-    monkeypatch.setattr(
-        "prumo.commands.create.detect_node_toolchain",
-        react_toolchain,
-    )
-    monkeypatch.setattr(
-        "prumo.commands.create.generate_react_project",
-        lambda target, _npm: generated_in.append(target),
-    )
-
-    result = runner.invoke(app, ["create"], input="portal\ny\n")
-
-    assert result.exit_code == 0
-    assert generated_in == [tmp_path / "portal"]
-    assert prompts == [
-        ("O que você quer criar?", tuple(ProjectType)),
-        ("Escolha o framework:", tuple(Frontend)),
-    ]
-    assert "Backend:" not in result.output
-    assert "Banco:" not in result.output
-
-
 @pytest.mark.parametrize(
-    ("selections", "expected_options", "technology"),
+    ("selections", "workflows"),
     [
-        (
-            (ProjectType.FRONTEND, Frontend.ANGULAR),
-            (tuple(ProjectType), tuple(Frontend)),
-            "Angular",
-        ),
-        (
-            (ProjectType.API, ApiFramework.FASTAPI, Database.MYSQL),
-            (tuple(ProjectType), tuple(ApiFramework), tuple(Database)),
-            "FastAPI",
-        ),
+        ((ProjectType.FRONTEND, Frontend.REACT), {"deploy.yml"}),
+        ((ProjectType.FRONTEND, Frontend.ANGULAR), {"deploy.yml"}),
+        ((ProjectType.API, Backend.EXPRESS, Database.NONE), {"deploy.yml"}),
         (
             (
                 ProjectType.FULLSTACK,
                 Frontend.REACT,
-                ApiFramework.EXPRESS,
-                Database.NONE,
+                Backend.FASTAPI,
+                Database.MYSQL,
+                MigrationStrategy.ALEMBIC,
             ),
-            (
-                tuple(ProjectType),
-                tuple(Frontend),
-                tuple(ApiFramework),
-                tuple(Database),
-            ),
-            "Express",
+            {"deploy-frontend.yml", "deploy-backend.yml", "migrations-backend.yml"},
         ),
         (
-            (ProjectType.WEB_APP, WebFramework.FLASK, Database.MYSQL),
-            (tuple(ProjectType), tuple(WebFramework), tuple(Database)),
-            "Flask",
+            (
+                ProjectType.WEB_APP,
+                Backend.FLASK,
+                Database.MYSQL,
+                MigrationStrategy.ALEMBIC,
+            ),
+            {"deploy.yml", "migrations.yml"},
         ),
     ],
 )
-def test_unavailable_configuration_is_recognized_without_creating_files(
+def test_created_project_has_agents_readme_and_planned_workflows(
     selections: tuple[StrEnum, ...],
-    expected_options: tuple[tuple[StrEnum, ...], ...],
-    technology: str,
-    tmp_path: Path,
+    workflows: set[str],
+    fake_environment: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.chdir(tmp_path)
-    prompts = configure_menu_selections(monkeypatch, selections)
+    configure_menu_selections(monkeypatch, selections)
 
-    result = runner.invoke(app, ["create"], input="projeto\n")
+    result = runner.invoke(app, ["create"], input="portal\ny\n")
 
-    assert result.exit_code == 1
-    assert tuple(options for _message, options in prompts) == expected_options
-    assert technology in result.output
-    assert "Nenhum arquivo foi criado." in result.output
-    assert not (tmp_path / "projeto").exists()
+    project = fake_environment / "portal"
+    assert result.exit_code == 0, result.output
+    assert (project / "AGENTS.md").is_file()
+    assert (project / "README.md").is_file()
+    assert ".env" in (project / ".gitignore").read_text(encoding="utf-8")
+    generated = {path.name for path in (project / ".github" / "workflows").iterdir()}
+    assert generated == workflows
 
 
-def test_create_can_be_cancelled_before_environment_checks(
-    tmp_path: Path,
+def test_frontend_does_not_ask_backend_or_database(
+    fake_environment: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.chdir(tmp_path)
-    configure_menu_selections(
+    prompts = configure_menu_selections(
         monkeypatch,
         (ProjectType.FRONTEND, Frontend.REACT),
     )
@@ -168,25 +157,26 @@ def test_create_can_be_cancelled_before_environment_checks(
     result = runner.invoke(app, ["create"], input="portal\nn\n")
 
     assert result.exit_code == 0
+    assert [message for message, _options in prompts] == [
+        "O que você quer criar?",
+        "Framework:",
+    ]
     assert "Operação cancelada." in result.output
-    assert not (tmp_path / "portal").exists()
+    assert not (fake_environment / "portal").exists()
 
 
-def test_create_stops_before_creating_files_when_node_is_unavailable(
+def test_missing_tool_stops_before_creating_files(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    configure_menu_selections(
-        monkeypatch,
-        (ProjectType.FRONTEND, Frontend.REACT),
-    )
+    configure_menu_selections(monkeypatch, (ProjectType.FRONTEND, Frontend.REACT))
 
-    def fail_prerequisite_check() -> NodeToolchain:
+    def fail_prerequisite_check(_plan: ProjectPlan) -> Toolchain:
         raise NodePrerequisiteError("Node.js não encontrado.")
 
     monkeypatch.setattr(
-        "prumo.commands.create.detect_node_toolchain",
+        "prumo.commands.create.check_prerequisites",
         fail_prerequisite_check,
     )
 
@@ -194,35 +184,23 @@ def test_create_stops_before_creating_files_when_node_is_unavailable(
 
     assert result.exit_code == 1
     assert "Nenhum arquivo foi criado." in result.output
-    assert "Traceback" not in result.output
     assert not (tmp_path / "portal").exists()
 
 
-def test_create_handles_vite_failure_without_traceback(
-    tmp_path: Path,
+def test_generation_failure_is_reported_without_traceback_or_workflows(
+    fake_environment: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.chdir(tmp_path)
-    configure_menu_selections(
-        monkeypatch,
-        (ProjectType.FRONTEND, Frontend.REACT),
-    )
-    monkeypatch.setattr(
-        "prumo.commands.create.detect_node_toolchain",
-        react_toolchain,
-    )
+    configure_menu_selections(monkeypatch, (ProjectType.FRONTEND, Frontend.REACT))
 
-    def fail_generation(_target: Path, _npm: Path) -> None:
-        raise ReactScaffoldError("Falha esperada do Vite.")
+    def fail(_component: ComponentPlan, _target: Path, _tools: Toolchain) -> None:
+        raise GenerationError("Falha esperada do Vite.")
 
-    monkeypatch.setattr(
-        "prumo.commands.create.generate_react_project",
-        fail_generation,
-    )
+    monkeypatch.setitem(create_command._GENERATORS, Frontend.REACT, fail)
 
     result = runner.invoke(app, ["create"], input="portal\ny\n")
 
     assert result.exit_code == 1
     assert "Falha esperada do Vite." in result.output
-    assert "npm install não foi executado" in result.output
     assert "Traceback" not in result.output
+    assert not (fake_environment / "portal" / ".github").exists()

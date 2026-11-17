@@ -9,10 +9,6 @@ from pathlib import Path
 
 NodeVersion = tuple[int, int, int]
 
-_SUPPORTED_NODE_BASELINES: tuple[NodeVersion, ...] = (
-    (20, 19, 0),
-    (22, 12, 0),
-)
 _NODE_VERSION_PATTERN = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
 
 
@@ -21,26 +17,43 @@ class NodePrerequisiteError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class NodeRequirement:
+    """Node.js version lines accepted by a tool used by a generator."""
+
+    tool: str
+    baselines: tuple[NodeVersion, ...]
+
+
+VITE_REQUIREMENT = NodeRequirement("Vite", ((20, 19, 0), (22, 12, 0)))
+EXPRESS_REQUIREMENT = NodeRequirement("Express", ((20, 19, 0), (22, 12, 0)))
+ANGULAR_REQUIREMENT = NodeRequirement("Angular CLI", ((22, 22, 3), (24, 15, 0)))
+
+
+@dataclass(frozen=True, slots=True)
 class NodeToolchain:
-    """Executables and version required to generate a React project."""
+    """Executables and version required to generate Node.js projects."""
 
     node_executable: Path
     npm_executable: Path
     node_version: NodeVersion
 
 
-def detect_node_toolchain() -> NodeToolchain:
+def detect_node_toolchain(
+    requirement: NodeRequirement = VITE_REQUIREMENT,
+) -> NodeToolchain:
     """Locate Node.js and npm and ensure the Node.js version is supported."""
     node_executable = shutil.which("node")
     if node_executable is None:
         raise NodePrerequisiteError(
-            "React requer Node.js, mas ele não foi encontrado.\n"
+            f"{requirement.tool} requer Node.js, mas ele não foi encontrado.\n"
             "Instale uma versão compatível do Node.js e execute novamente."
         )
 
     npm_executable = _find_npm()
     if npm_executable is None:
-        raise NodePrerequisiteError("React requer npm, mas ele não foi encontrado.")
+        raise NodePrerequisiteError(
+            f"{requirement.tool} requer npm, mas ele não foi encontrado."
+        )
 
     version_output = _read_node_version(node_executable)
     node_version = parse_node_version(version_output)
@@ -48,14 +61,15 @@ def detect_node_toolchain() -> NodeToolchain:
         raise NodePrerequisiteError(
             "Não foi possível interpretar a versão instalada do Node.js.\n"
             f"Encontrado: {version_output or 'saída vazia'}\n"
-            f"Necessário: {node_version_requirement()}"
+            f"Necessário: {node_version_requirement(requirement)}"
         )
 
-    if not is_node_version_compatible(node_version):
+    if not is_node_version_compatible(node_version, requirement):
         raise NodePrerequisiteError(
-            "A versão instalada do Node.js não é compatível com o Vite.\n"
+            "A versão instalada do Node.js não é compatível com "
+            f"{requirement.tool}.\n"
             f"Encontrado: {format_node_version(node_version)}\n"
-            f"Necessário: {node_version_requirement()}"
+            f"Necessário: {node_version_requirement(requirement)}"
         )
 
     return NodeToolchain(
@@ -75,13 +89,16 @@ def parse_node_version(value: str) -> NodeVersion | None:
     return int(major), int(minor), int(patch)
 
 
-def is_node_version_compatible(version: NodeVersion) -> bool:
+def is_node_version_compatible(
+    version: NodeVersion,
+    requirement: NodeRequirement = VITE_REQUIREMENT,
+) -> bool:
     """Return whether a Node.js version meets a supported baseline."""
-    for baseline in _SUPPORTED_NODE_BASELINES:
+    for baseline in requirement.baselines:
         if version[0] == baseline[0]:
             return version >= baseline
 
-    return version[0] > _SUPPORTED_NODE_BASELINES[-1][0]
+    return version[0] > requirement.baselines[-1][0]
 
 
 def format_node_version(version: NodeVersion) -> str:
@@ -89,10 +106,12 @@ def format_node_version(version: NodeVersion) -> str:
     return ".".join(str(part) for part in version)
 
 
-def node_version_requirement() -> str:
+def node_version_requirement(
+    requirement: NodeRequirement = VITE_REQUIREMENT,
+) -> str:
     """Describe the supported Node.js version lines."""
     baselines = [
-        f"{major}.{minor}+" for major, minor, _patch in _SUPPORTED_NODE_BASELINES
+        f"{format_node_version(baseline)}+" for baseline in requirement.baselines
     ]
     return f"Node {' ou '.join(baselines)}"
 

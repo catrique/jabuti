@@ -1,0 +1,50 @@
+"""Summary shown before a project is created."""
+
+from prumo.documentation.readme import structure_lines
+from prumo.project.config import Database, ProjectType, Topology
+from prumo.project.planner import ProjectPlan
+
+_LABEL_WIDTH = 18
+_STACK_FIELDS = {
+    ProjectType.FRONTEND: (("Framework", "frontend"),),
+    ProjectType.API: (("Backend", "backend"),),
+    ProjectType.FULLSTACK: (("Frontend", "frontend"), ("Backend", "backend")),
+    ProjectType.WEB_APP: (("Framework", "backend"),),
+}
+
+
+def summary_lines(plan: ProjectPlan) -> list[str]:
+    """Only the choices relevant to the plan, followed by deploy and structure."""
+    fields = [
+        f"{label + ':':<{_LABEL_WIDTH}}{value}" for label, value in _fields(plan)
+    ]
+    return [
+        "Projeto",
+        "-" * 32,
+        "",
+        *fields,
+        "",
+        "Estrutura:",
+        "",
+        *structure_lines(plan),
+    ]
+
+
+def _fields(plan: ProjectPlan) -> list[tuple[str, str]]:
+    config = plan.config
+    fields = [("Nome", config.name), ("Tipo", config.project_type.value)]
+    fields.extend(
+        (label, str(getattr(config, attribute)))
+        for label, attribute in _STACK_FIELDS[config.project_type]
+    )
+    if config.topology is not Topology.STANDALONE:
+        fields.append(("Arquitetura", config.topology.value))
+    if config.backend is not None:
+        fields.append(("Banco", config.database.value))
+    if config.database is not Database.NONE:
+        fields.append(("Migrations", config.migrations.value))
+    for component in plan.components:
+        scope = component.deployment.scope
+        label = f"Deploy {scope}" if scope else "Deploy"
+        fields.append((label, component.deployment.app_name))
+    return fields
