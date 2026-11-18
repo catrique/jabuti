@@ -11,6 +11,7 @@ from jabuti.project.planner import ComponentPlan
 from jabuti.rendering import write_template, write_text_file
 
 _PORT_VARIABLE = "PORT=3000"
+_CQRS_MODULES = ("index.js", "errors.js", "results.js", "operations.js", "handlers.js")
 
 
 def generate_express(
@@ -20,14 +21,16 @@ def generate_express(
 ) -> None:
     """Create the Express sources, package.json and install dependencies."""
     _write_package_json(component, target_directory)
+    values = {
+        "PROJECT_NAME": component.project_name,
+        "FRONTEND_ORIGINS": component.frontend_origin or "",
+    }
     for relative_path, template in _source_files(component).items():
-        write_template(
-            target_directory / relative_path,
-            template,
-            {"PROJECT_NAME": component.project_name},
-        )
+        write_template(target_directory / relative_path, template, values)
 
     variables = [_PORT_VARIABLE]
+    if not component.serves_frontend:
+        variables.append(f"FRONTEND_ORIGINS={values['FRONTEND_ORIGINS']}")
     if component.database is Database.MYSQL:
         variables.extend(DATABASE_VARIABLES)
     write_env_example(target_directory, variables)
@@ -42,8 +45,12 @@ def generate_express(
 def _source_files(component: ComponentPlan) -> dict[str, str]:
     files = {
         "src/server.js": "express/server.js.tpl",
+        "src/http.js": "express/http.js.tpl",
         "tests/health.test.js": "express/health.test.js.tpl",
+        "tests/cqrs.test.js": "express/cqrs.test.js.tpl",
     }
+    for module in _CQRS_MODULES:
+        files[f"src/application/cqrs/{module}"] = f"express/cqrs/{module}.tpl"
     if component.serves_frontend:
         files["src/app.js"] = "express/app-web.js.tpl"
         files["views/index.ejs"] = "express/index.ejs.tpl"
@@ -51,7 +58,7 @@ def _source_files(component: ComponentPlan) -> dict[str, str]:
     else:
         files["src/app.js"] = "express/app-api.js.tpl"
     if component.database is Database.MYSQL:
-        files["src/database.js"] = "express/database.js.tpl"
+        files["src/infrastructure/database.js"] = "express/database.js.tpl"
     return files
 
 

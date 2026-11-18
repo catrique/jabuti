@@ -6,7 +6,7 @@ from alembic import context
 from sqlalchemy import create_engine, pool
 
 from app.config import database_url
-from app.database import Base
+from app.infrastructure.database import Base
 
 config = context.config
 

@@ -20,6 +20,7 @@ def generate_flask(
     files = {
         "app/__init__.py": "flask/__init__.py.tpl",
         "app/routes.py": "flask/routes.py.tpl",
+        "app/http.py": "flask/http.py.tpl",
         "templates/index.html": "flask/index.html.tpl",
         "static/styles.css": "web/styles.css.tpl",
         "tests/test_routes.py": "flask/test_routes.py.tpl",

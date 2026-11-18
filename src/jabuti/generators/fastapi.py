@@ -16,9 +16,13 @@ def generate_fastapi(
     tools: Toolchain,
 ) -> None:
     """Create the FastAPI application, its test and its .venv."""
-    values = {"PROJECT_NAME": component.project_name}
+    values = {
+        "PROJECT_NAME": component.project_name,
+        "FRONTEND_ORIGINS": component.frontend_origin or "",
+    }
     write_text_file(target_directory / "app" / "__init__.py", "")
     write_template(target_directory / "app" / "main.py", "fastapi/main.py.tpl", values)
+    write_template(target_directory / "app" / "http.py", "fastapi/http.py.tpl")
     write_template(
         target_directory / "tests" / "test_health.py",
         "fastapi/test_health.py.tpl",

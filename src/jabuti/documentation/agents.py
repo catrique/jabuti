@@ -1,5 +1,13 @@
 """AGENTS.md generated from the project plan."""
 
+from jabuti.documentation.architecture import (
+    BACKEND_RULES,
+    CQRS_SUMMARY,
+    FRONTEND_RULES,
+    GENERAL_RULES,
+    architecture_guide,
+    is_frontend,
+)
 from jabuti.documentation.markdown import (
     architecture_description,
     bullets,
@@ -11,6 +19,7 @@ from jabuti.documentation.markdown import (
     location,
     migration_commands,
     migration_components,
+    numbered,
     section,
     technology_lines,
 )
@@ -19,7 +28,7 @@ from jabuti.project.planner import ProjectPlan
 
 _DEVELOPMENT_RULES = (
     "Preserve the existing architecture.",
-    "Avoid unnecessary abstractions.",
+    *GENERAL_RULES,
     "Keep responsibilities separated and functions small.",
     "Never hardcode credentials or environment-specific URLs.",
     "Never commit `.env` files; keep `.env.example` up to date instead.",
@@ -39,6 +48,9 @@ def render_agents(plan: ProjectPlan) -> str:
     sections = [
         _architecture(plan),
         _structure(plan),
+        _cqrs(plan),
+        _layer_rules("Backend rules", BACKEND_RULES, _has_backend(plan)),
+        _layer_rules("Frontend rules", FRONTEND_RULES, _has_frontend(plan)),
         _commands(plan),
         _environment(plan),
         _database(plan),
@@ -76,6 +88,36 @@ def _structure(plan: ProjectPlan) -> str:
     )
 
 
+def _cqrs(plan: ProjectPlan) -> str:
+    blocks = []
+    for component in plan.components:
+        guide = architecture_guide(component)
+        steps = numbered(guide.new_feature)
+        content = (
+            code_block(guide.layout, language="text"),
+            bullets(guide.rules),
+            "Adding a feature:",
+            steps,
+        )
+        if len(plan.components) == 1:
+            blocks.extend(content)
+        else:
+            blocks.append(section(component_title(component), *content, level=3))
+    return section("Lightweight CQRS", CQRS_SUMMARY, *blocks)
+
+
+def _layer_rules(title: str, rules: tuple[str, ...], applies: bool) -> str | None:
+    return section(title, bullets(rules)) if applies else None
+
+
+def _has_backend(plan: ProjectPlan) -> bool:
+    return any(not is_frontend(c.framework) for c in plan.components)
+
+
+def _has_frontend(plan: ProjectPlan) -> bool:
+    return any(is_frontend(c.framework) for c in plan.components)
+
+
 def _commands(plan: ProjectPlan) -> str:
     if len(plan.components) == 1:
         commands = command_lines(plan.components[0])
@@ -97,6 +139,7 @@ def _environment(plan: ProjectPlan) -> str | None:
         "Copy `.env.example` to `.env` in the application directory and fill in "
         "local values. `.env` is ignored by Git and must never be committed.",
         "Never hardcode secrets.",
+        *_cors_note(plan),
     )
 
 
@@ -140,3 +183,15 @@ def _migrations(plan: ProjectPlan) -> str | None:
         "Migrations never run automatically; apply them manually.",
     )
 
+
+
+def _cors_note(plan: ProjectPlan) -> list[str]:
+    if plan.config.topology is not Topology.SEPARATED:
+        return []
+    frontend, backend = plan.components
+    return [
+        f"The frontend calls the backend at `{frontend.api_base_url}` during "
+        f"development; the backend accepts browser calls only from "
+        f"`FRONTEND_ORIGINS` (default `{backend.frontend_origin}`). Configure "
+        "both for every other environment."
+    ]

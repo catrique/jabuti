@@ -115,6 +115,7 @@ def test_created_project_has_agents_readme_and_no_workflows(
     assert not (project / ".github").exists()
     for document in ("README.md", "AGENTS.md"):
         content = (project / document).read_text(encoding="utf-8").lower()
+        assert "lightweight cqrs" in content
         assert "deploy" not in content
         assert "workflow" not in content
 

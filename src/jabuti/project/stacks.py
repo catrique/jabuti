@@ -23,6 +23,7 @@ class Stack:
     setup_commands: tuple[str, ...]
     run_command: str
     check_commands: tuple[str, ...]
+    dev_url: str
 
 
 _NODE_SETUP = ("npm install",)
@@ -40,6 +41,7 @@ _STACKS: dict[Framework, Stack] = {
         setup_commands=_NODE_SETUP,
         run_command="npm run dev",
         check_commands=("npm run lint", "npm run build"),
+        dev_url="http://localhost:5173",
     ),
     Frontend.ANGULAR: Stack(
         runtime=Runtime.NODE,
@@ -48,6 +50,7 @@ _STACKS: dict[Framework, Stack] = {
         setup_commands=_NODE_SETUP,
         run_command="npm start",
         check_commands=("npm run build",),
+        dev_url="http://localhost:4200",
     ),
     Backend.FASTAPI: Stack(
         runtime=Runtime.PYTHON,
@@ -56,6 +59,7 @@ _STACKS: dict[Framework, Stack] = {
         setup_commands=_PYTHON_SETUP,
         run_command=".venv/bin/python -m uvicorn app.main:app --reload",
         check_commands=_PYTHON_TESTS,
+        dev_url="http://localhost:8000",
     ),
     Backend.FLASK: Stack(
         runtime=Runtime.PYTHON,
@@ -64,6 +68,7 @@ _STACKS: dict[Framework, Stack] = {
         setup_commands=_PYTHON_SETUP,
         run_command=".venv/bin/python -m flask --app app run --debug",
         check_commands=_PYTHON_TESTS,
+        dev_url="http://localhost:5000",
     ),
     Backend.EXPRESS: Stack(
         runtime=Runtime.NODE,
@@ -72,6 +77,7 @@ _STACKS: dict[Framework, Stack] = {
         setup_commands=_NODE_SETUP,
         run_command="npm run dev",
         check_commands=("npm test",),
+        dev_url="http://localhost:3000",
     ),
 }
 

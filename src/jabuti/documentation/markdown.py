@@ -2,7 +2,13 @@
 
 from collections.abc import Iterable
 
-from jabuti.project.config import Backend, Database, MigrationStrategy, ProjectType
+from jabuti.project.config import (
+    Backend,
+    Database,
+    Frontend,
+    MigrationStrategy,
+    ProjectType,
+)
 from jabuti.project.planner import ROOT_DIRECTORY, ComponentPlan, ProjectPlan
 
 _ARCHITECTURE = {
@@ -17,6 +23,7 @@ _ARCHITECTURE = {
 
 ALEMBIC_REVISION ='.venv/bin/python -m alembic revision --autogenerate -m "descricao"'
 ALEMBIC_UPGRADE = ".venv/bin/python -m alembic upgrade head"
+ALEMBIC_CURRENT = ".venv/bin/python -m alembic current"
 NODE_MIGRATION = "npm run migrar"
 
 
@@ -48,6 +55,11 @@ def bullets(items: Iterable[str]) -> str:
     return "\n".join(f"- {item}" for item in items)
 
 
+def numbered(items: Iterable[str]) -> str:
+    """Markdown numbered list."""
+    return "\n".join(f"{number}. {item}" for number, item in enumerate(items, 1))
+
+
 def location(component: ComponentPlan) -> str:
     """Directory of a component, as shown in documentation."""
     if component.directory == ROOT_DIRECTORY:
@@ -72,7 +84,9 @@ def command_lines(component: ComponentPlan) -> list[str]:
 def migration_commands(component: ComponentPlan) -> list[str]:
     """Local commands to create and apply migrations."""
     if component.migrations is MigrationStrategy.ALEMBIC:
-        return _from_root(component, [ALEMBIC_REVISION, ALEMBIC_UPGRADE])
+        return _from_root(
+            component, [ALEMBIC_REVISION, ALEMBIC_UPGRADE, ALEMBIC_CURRENT]
+        )
     if component.migrations is MigrationStrategy.NPM_SCRIPT:
         return _from_root(component, [NODE_MIGRATION])
     return []
@@ -92,11 +106,15 @@ def database_components(components: Iterable[ComponentPlan]) -> list[ComponentPl
 def environment_components(
     components: Iterable[ComponentPlan],
 ) -> list[ComponentPlan]:
-    """Components generated with a .env.example (Express always has PORT)."""
+    """Components generated with a .env.example.
+
+    React always has VITE_API_BASE_URL and Express always has PORT.
+    """
     return [
         c
         for c in components
-        if c.framework is Backend.EXPRESS or c.database is not Database.NONE
+        if c.framework in (Frontend.REACT, Backend.EXPRESS)
+        or c.database is not Database.NONE
     ]
 
 

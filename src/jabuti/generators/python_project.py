@@ -13,6 +13,14 @@ from jabuti.rendering import write_template, write_text_file
 
 _DATABASE_PACKAGES = ("SQLAlchemy", "PyMySQL[rsa]", "python-dotenv")
 _ALEMBIC_PACKAGES = ("alembic",)
+_CQRS_MODULES = (
+    "__init__.py",
+    "errors.py",
+    "results.py",
+    "command.py",
+    "query.py",
+    "handlers.py",
+)
 
 
 def prepare_python_project(
@@ -21,7 +29,8 @@ def prepare_python_project(
     tools: Toolchain,
     packages: Sequence[str],
 ) -> None:
-    """Add database support, create .venv, install packages and pin them."""
+    """Add CQRS and database support, create .venv, install and pin packages."""
+    _write_cqrs(target_directory)
     all_packages = [*packages]
     if component.database is Database.MYSQL:
         _write_database_support(target_directory)
@@ -40,12 +49,23 @@ def prepare_python_project(
     _freeze_requirements(venv_python, target_directory)
 
 
-def _write_database_support(target_directory: Path) -> None:
-    write_template(target_directory / "app" / "config.py", "python/config.py.tpl")
+def _write_cqrs(target_directory: Path) -> None:
+    """Framework-independent CQRS primitives and a test that exercises them."""
+    application = target_directory / "app" / "application"
+    write_text_file(application / "__init__.py", "")
+    for module in _CQRS_MODULES:
+        write_template(application / "cqrs" / module, f"python/cqrs/{module}.tpl")
     write_template(
-        target_directory / "app" / "database.py",
-        "python/database.py.tpl",
+        target_directory / "tests" / "test_cqrs.py",
+        "python/test_cqrs.py.tpl",
     )
+
+
+def _write_database_support(target_directory: Path) -> None:
+    infrastructure = target_directory / "app" / "infrastructure"
+    write_template(target_directory / "app" / "config.py", "python/config.py.tpl")
+    write_text_file(infrastructure / "__init__.py", "")
+    write_template(infrastructure / "database.py", "python/database.py.tpl")
     write_env_example(target_directory, DATABASE_VARIABLES)
 
 

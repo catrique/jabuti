@@ -1,6 +1,6 @@
 """Plan where each component of a project lives."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from jabuti.project.config import (
@@ -28,6 +28,10 @@ class ComponentPlan:
     serves_frontend: bool
     database: Database
     migrations: MigrationStrategy
+    api_base_url: str | None = None
+    """Frontend only: local URL of the backend of the same repository."""
+    frontend_origin: str | None = None
+    """Backend only: local origin of the frontend allowed to call it."""
 
     @property
     def stack(self) -> Stack:
@@ -64,9 +68,11 @@ class ProjectTargetExistsError(FileExistsError):
 def plan_project(config: ProjectConfig) -> ProjectPlan:
     """Calculate the project layout without touching the filesystem."""
     if config.topology is Topology.SEPARATED:
+        frontend = _plan_frontend(config, FRONTEND_DIRECTORY)
+        backend = _plan_backend(config, BACKEND_DIRECTORY)
         components = (
-            _plan_frontend(config, FRONTEND_DIRECTORY),
-            _plan_backend(config, BACKEND_DIRECTORY),
+            replace(frontend, api_base_url=backend.stack.dev_url),
+            replace(backend, frontend_origin=frontend.stack.dev_url),
         )
     elif config.frontend is not None:
         components = (_plan_frontend(config, ROOT_DIRECTORY),)

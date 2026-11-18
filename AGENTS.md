@@ -31,6 +31,11 @@ Este arquivo orienta agentes de código que trabalham no repositório Jabuti.
   qualquer configuração de servidor ou infraestrutura.
 - O Jabuti nunca gera credenciais nem cria `.env` real.
 - Migrations são apenas locais (Alembic) e nunca executam automaticamente.
+- Projetos gerados usam Lightweight CQRS: as primitivas (Command, Query,
+  handlers, results, `ErrorCode`) nunca importam framework web, HTTP ou banco;
+  o mapeamento `ErrorCode` → HTTP fica no adaptador de cada stack.
+- O scaffold nasce sem domínio fictício nem pastas vazias; a orientação de
+  crescimento fica no `AGENTS.md` gerado (`documentation/architecture.py`).
 - Subprocessos usam lista de argumentos, sem shell e sem `os.system`.
 - Testes focam comportamentos críticos; evite testes de baixo valor.
 
