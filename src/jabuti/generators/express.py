@@ -66,7 +66,7 @@ def _packages(component: ComponentPlan) -> list[str]:
 
 def _write_package_json(component: ComponentPlan, target_directory: Path) -> None:
     package = {
-        "name": component.deployment.app_name.lower(),
+        "name": component.project_name.lower(),
         "version": "0.1.0",
         "private": True,
         "type": "module",

@@ -1,4 +1,3 @@
-import json
 from enum import StrEnum
 from pathlib import Path
 
@@ -8,8 +7,6 @@ from typer.testing import CliRunner
 from jabuti import __version__
 from jabuti.cli import app
 from jabuti.commands import create as create_command
-from jabuti.commands.prompts import DeployWorkflows
-from jabuti.deployment.model import WorkflowTechnology
 from jabuti.generators.process import GenerationError
 from jabuti.node import NodePrerequisiteError
 from jabuti.prerequisites import Toolchain
@@ -47,23 +44,7 @@ def configure_menu_selections(
 
 
 def fake_generator(component: ComponentPlan, target: Path, _tools: Toolchain) -> None:
-    """Create only the files that the workflows of a component require."""
-    if component.deployment.technology is WorkflowTechnology.PYTHON:
-        (target / "requirements.txt").write_text("fastapi\n", encoding="utf-8")
-    else:
-        (target / "package.json").write_text("{}", encoding="utf-8")
-        (target / "package-lock.json").write_text("{}", encoding="utf-8")
-    if component.framework is Frontend.ANGULAR:
-        workspace = {
-            "projects": {
-                component.project_name: {
-                    "architect": {
-                        "build": {"builder": "@angular/build:application"}
-                    }
-                }
-            }
-        }
-        (target / "angular.json").write_text(json.dumps(workspace), encoding="utf-8")
+    """Stand-in generator that creates only the local migration files."""
     if component.migrations is MigrationStrategy.ALEMBIC:
         (target / "alembic.ini").write_text("", encoding="utf-8")
         (target / "migrations").mkdir()
@@ -100,7 +81,6 @@ def test_version_displays_current_version() -> None:
     assert result.output == f"Jabuti {__version__}\n"
 
 
-YES = DeployWorkflows.YES
 FULLSTACK_ALEMBIC = (
     ProjectType.FULLSTACK,
     Frontend.REACT,
@@ -111,30 +91,17 @@ FULLSTACK_ALEMBIC = (
 
 
 @pytest.mark.parametrize(
-    ("selections", "workflows"),
+    "selections",
     [
-        ((ProjectType.FRONTEND, Frontend.REACT, YES), {"deploy.yml"}),
-        ((ProjectType.FRONTEND, Frontend.ANGULAR, YES), {"deploy.yml"}),
-        ((ProjectType.API, Backend.EXPRESS, Database.NONE, YES), {"deploy.yml"}),
-        (
-            (*FULLSTACK_ALEMBIC, YES),
-            {"deploy-frontend.yml", "deploy-backend.yml", "migrations-backend.yml"},
-        ),
-        (
-            (
-                ProjectType.WEB_APP,
-                Backend.FLASK,
-                Database.MYSQL,
-                MigrationStrategy.ALEMBIC,
-                YES,
-            ),
-            {"deploy.yml", "migrations.yml"},
-        ),
+        (ProjectType.FRONTEND, Frontend.REACT),
+        (ProjectType.FRONTEND, Frontend.ANGULAR),
+        (ProjectType.API, Backend.EXPRESS, Database.NONE),
+        FULLSTACK_ALEMBIC,
+        (ProjectType.WEB_APP, Backend.FLASK, Database.MYSQL, MigrationStrategy.ALEMBIC),
     ],
 )
-def test_created_project_has_agents_readme_and_planned_workflows(
+def test_created_project_has_agents_readme_and_no_workflows(
     selections: tuple[StrEnum, ...],
-    workflows: set[str],
     fake_environment: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -144,29 +111,29 @@ def test_created_project_has_agents_readme_and_planned_workflows(
 
     project = fake_environment / "portal"
     assert result.exit_code == 0, result.output
-    assert (project / "AGENTS.md").is_file()
-    assert "DEPLOY_ROOT" in (project / "README.md").read_text(encoding="utf-8")
     assert ".env" in (project / ".gitignore").read_text(encoding="utf-8")
-    generated = {path.name for path in (project / ".github" / "workflows").iterdir()}
-    assert generated == workflows
+    assert not (project / ".github").exists()
+    for document in ("README.md", "AGENTS.md"):
+        content = (project / document).read_text(encoding="utf-8").lower()
+        assert "deploy" not in content
+        assert "workflow" not in content
 
 
-def test_project_without_deploy_has_no_workflows(
+def test_fullstack_keeps_local_alembic_migrations(
     fake_environment: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    configure_menu_selections(monkeypatch, (*FULLSTACK_ALEMBIC, DeployWorkflows.NO))
+    configure_menu_selections(monkeypatch, FULLSTACK_ALEMBIC)
 
     result = runner.invoke(app, ["create"], input="portal\ny\n")
 
     project = fake_environment / "portal"
     assert result.exit_code == 0, result.output
-    assert not (project / ".github").exists()
+    assert (project / "frontend").is_dir()
     assert (project / "backend" / "alembic.ini").is_file()
     for document in ("README.md", "AGENTS.md"):
         content = (project / document).read_text(encoding="utf-8")
-        assert "DEPLOY_ROOT" not in content
-        assert ".github/workflows" not in content
+        assert "alembic upgrade head" in content
 
 
 def test_frontend_does_not_ask_backend_or_database(
@@ -175,7 +142,7 @@ def test_frontend_does_not_ask_backend_or_database(
 ) -> None:
     prompts = configure_menu_selections(
         monkeypatch,
-        (ProjectType.FRONTEND, Frontend.REACT, YES),
+        (ProjectType.FRONTEND, Frontend.REACT),
     )
 
     result = runner.invoke(app, ["create"], input="portal\nn\n")
@@ -184,7 +151,6 @@ def test_frontend_does_not_ask_backend_or_database(
     assert [message for message, _options in prompts] == [
         "O que você quer criar?",
         "Framework:",
-        "Deseja gerar workflows de deploy?",
     ]
     assert "Operação cancelada." in result.output
     assert not (fake_environment / "portal").exists()
@@ -195,7 +161,7 @@ def test_missing_tool_stops_before_creating_files(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    configure_menu_selections(monkeypatch, (ProjectType.FRONTEND, Frontend.REACT, YES))
+    configure_menu_selections(monkeypatch, (ProjectType.FRONTEND, Frontend.REACT))
 
     def fail_prerequisite_check(_plan: ProjectPlan) -> Toolchain:
         raise NodePrerequisiteError("Node.js não encontrado.")
@@ -212,11 +178,11 @@ def test_missing_tool_stops_before_creating_files(
     assert not (tmp_path / "portal").exists()
 
 
-def test_generation_failure_is_reported_without_traceback_or_workflows(
+def test_generation_failure_is_reported_without_traceback(
     fake_environment: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    configure_menu_selections(monkeypatch, (ProjectType.FRONTEND, Frontend.REACT, YES))
+    configure_menu_selections(monkeypatch, (ProjectType.FRONTEND, Frontend.REACT))
 
     def fail(_component: ComponentPlan, _target: Path, _tools: Toolchain) -> None:
         raise GenerationError("Falha esperada do Vite.")
@@ -228,4 +194,3 @@ def test_generation_failure_is_reported_without_traceback_or_workflows(
     assert result.exit_code == 1
     assert "Falha esperada do Vite." in result.output
     assert "Traceback" not in result.output
-    assert not (fake_environment / "portal" / ".github").exists()

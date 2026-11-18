@@ -7,8 +7,6 @@ from jabuti.documentation.markdown import (
     command_lines,
     component_title,
     database_components,
-    deploy_variable_lines,
-    deployment_lines,
     environment_components,
     location,
     migration_commands,
@@ -29,18 +27,6 @@ _DEVELOPMENT_RULES = (
     "Run the relevant lint, build and tests before finishing a change.",
 )
 
-_DEPLOYMENT_RULES = (
-    "Workflows read server settings only from GitHub Actions Variables. Never "
-    "hardcode server paths, usernames or hostnames in workflows or code.",
-    "Preserve the path validations of the workflows when changing deployment: "
-    "absolute `DEPLOY_ROOT`, no symbolic links, a single safe `APP` name and a "
-    "destination that stays inside `DEPLOY_ROOT`.",
-    "`.env` files are never versioned nor published; the server keeps its own.",
-    "Migrations stay manual (`workflow_dispatch`); never run them on push or "
-    "deploy.",
-    "If deployment changes, review the workflows and the documentation together.",
-)
-
 _GIT_RULES = (
     "Review all changes (`git diff`, `git status`) before committing.",
     "Write clear, objective commit messages.",
@@ -57,7 +43,6 @@ def render_agents(plan: ProjectPlan) -> str:
         _environment(plan),
         _database(plan),
         _migrations(plan),
-        _deployment(plan),
         section("Development rules", bullets(_DEVELOPMENT_RULES)),
         section("Git rules", bullets(_GIT_RULES)),
     ]
@@ -111,7 +96,7 @@ def _environment(plan: ProjectPlan) -> str | None:
         "Environment variables",
         "Copy `.env.example` to `.env` in the application directory and fill in "
         "local values. `.env` is ignored by Git and must never be committed.",
-        "Never hardcode secrets. Production values live only on the server.",
+        "Never hardcode secrets.",
     )
 
 
@@ -146,46 +131,12 @@ def _migrations(plan: ProjectPlan) -> str | None:
         "Alembic" if component.migrations is MigrationStrategy.ALEMBIC
         else "`npm run migrar`"
     )
-    deployment = component.deployment
-    if plan.config.deploy_workflows:
-        production = (
-            "Migrations never run on push. In production they are applied only "
-            f"by the manual `{deployment.migrations_workflow}` workflow, in "
-            f"`{deployment.server_path}`."
-        )
-    else:
-        production = "Migrations never run automatically."
     return section(
         "Migrations",
         f"{mechanism} is the only supported mechanism for schema changes.",
         code_block(migration_commands(component)),
         "Do not modify the production schema manually. Review migrations before "
         "applying them.",
-        production,
+        "Migrations never run automatically; apply them manually.",
     )
 
-
-def _deployment(plan: ProjectPlan) -> str | None:
-    if not plan.config.deploy_workflows:
-        return None
-
-    blocks = [
-        section(component_title(c), bullets(deployment_lines(c.deployment)), level=3)
-        for c in plan.components
-    ]
-    paragraphs = [
-        "Deployment uses GitHub Actions on a self-hosted Linux X64 runner. "
-        "Applications are published to `<DEPLOY_ROOT>/<APP>`, where the server "
-        "settings come from GitHub Actions Variables:",
-        bullets(deploy_variable_lines()),
-        bullets(_DEPLOYMENT_RULES),
-        *blocks,
-    ]
-    if plan.config.topology is Topology.SEPARATED:
-        frontend, backend = plan.components
-        paragraphs.append(
-            f"Frontend server application: `{frontend.deployment.app_name}`. "
-            f"Backend server application: `{backend.deployment.app_name}`. "
-            "Each one has its own deploy workflow."
-        )
-    return section("Deployment", *paragraphs)

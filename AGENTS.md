@@ -26,15 +26,11 @@ Este arquivo orienta agentes de código que trabalham no repositório Jabuti.
 
 - Templates são recursos do pacote (`src/jabuti/templates/`), lidos com
   `importlib.resources`; nunca dependa de caminhos do repositório.
-- O planner é a fonte de verdade de diretórios e alvos de deploy; workflows são
-  gerados somente a partir de `DeploymentTarget`.
-- Regras de nomes não podem ser duplicadas: o backend de um fullstack separado
-  é sempre `<repo>-api` (`separated_backend_app_name`).
-- Workflows gerados nunca contêm caminhos, usuários ou hosts de servidor: o
-  diretório base e o usuário vêm de `${{ vars.DEPLOY_ROOT }}` e
-  `${{ vars.DEPLOY_USER }}`, validados por `resolve-target.sh.tpl`.
+- O planner é a fonte de verdade dos diretórios de cada componente.
+- O Jabuti não gera arquivos de deploy, workflows de deploy/migrations nem
+  qualquer configuração de servidor ou infraestrutura.
 - O Jabuti nunca gera credenciais nem cria `.env` real.
-- Migrations nunca executam automaticamente; seus workflows são manuais.
+- Migrations são apenas locais (Alembic) e nunca executam automaticamente.
 - Subprocessos usam lista de argumentos, sem shell e sem `os.system`.
 - Testes focam comportamentos críticos; evite testes de baixo valor.
 

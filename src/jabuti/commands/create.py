@@ -7,8 +7,6 @@ import typer
 
 from jabuti.commands.prompts import PromptCancelled, prompt_project_config
 from jabuti.commands.summary import summary_lines
-from jabuti.deployment.checks import DeploymentCheckError
-from jabuti.deployment.workflows import WorkflowConfigurationError
 from jabuti.generators.angular import generate_angular
 from jabuti.generators.express import generate_express
 from jabuti.generators.fastapi import generate_fastapi
@@ -91,11 +89,7 @@ def _generate(plan: ProjectPlan, project_root: Path, tools: Toolchain) -> None:
             typer.echo(f"[OK] {component.framework} criado")
 
         write_repository_files(plan, project_root)
-    except (
-        GenerationError,
-        DeploymentCheckError,
-        WorkflowConfigurationError,
-    ) as error:
+    except GenerationError as error:
         typer.echo(str(error), err=True)
         typer.echo(
             f"\nA criação foi interrompida. Os arquivos gerados até aqui foram "
@@ -104,10 +98,7 @@ def _generate(plan: ProjectPlan, project_root: Path, tools: Toolchain) -> None:
         )
         raise typer.Exit(code=1) from None
 
-    generated = "README.md, AGENTS.md e .gitignore"
-    if plan.config.deploy_workflows:
-        generated = f"Workflows de deploy, {generated}"
-    typer.echo(f"[OK] {generated} gerados")
+    typer.echo("[OK] README.md, AGENTS.md e .gitignore gerados")
 
 
 def _show_success(plan: ProjectPlan) -> None:

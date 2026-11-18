@@ -3,7 +3,6 @@
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
-from jabuti.deployment.model import WorkflowTechnology
 from jabuti.project.config import Backend, Framework, Frontend
 
 
@@ -16,10 +15,9 @@ class Runtime(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Stack:
-    """Runtime, deploy type and everyday commands of a framework."""
+    """Runtime, technologies and everyday commands of a framework."""
 
     runtime: Runtime
-    technology: WorkflowTechnology
     technologies: tuple[str, ...]
     source_directories: tuple[str, ...]
     setup_commands: tuple[str, ...]
@@ -37,7 +35,6 @@ _PYTHON_TESTS = (".venv/bin/python -m pytest",)
 _STACKS: dict[Framework, Stack] = {
     Frontend.REACT: Stack(
         runtime=Runtime.NODE,
-        technology=WorkflowTechnology.REACT,
         technologies=("React", "Vite", "TypeScript"),
         source_directories=("src/", "public/"),
         setup_commands=_NODE_SETUP,
@@ -46,7 +43,6 @@ _STACKS: dict[Framework, Stack] = {
     ),
     Frontend.ANGULAR: Stack(
         runtime=Runtime.NODE,
-        technology=WorkflowTechnology.ANGULAR,
         technologies=("Angular", "TypeScript"),
         source_directories=("src/", "public/"),
         setup_commands=_NODE_SETUP,
@@ -55,7 +51,6 @@ _STACKS: dict[Framework, Stack] = {
     ),
     Backend.FASTAPI: Stack(
         runtime=Runtime.PYTHON,
-        technology=WorkflowTechnology.PYTHON,
         technologies=("Python", "FastAPI", "Uvicorn"),
         source_directories=("app/", "tests/"),
         setup_commands=_PYTHON_SETUP,
@@ -64,7 +59,6 @@ _STACKS: dict[Framework, Stack] = {
     ),
     Backend.FLASK: Stack(
         runtime=Runtime.PYTHON,
-        technology=WorkflowTechnology.PYTHON,
         technologies=("Python", "Flask", "Jinja"),
         source_directories=("app/", "templates/", "static/", "tests/"),
         setup_commands=_PYTHON_SETUP,
@@ -73,7 +67,6 @@ _STACKS: dict[Framework, Stack] = {
     ),
     Backend.EXPRESS: Stack(
         runtime=Runtime.NODE,
-        technology=WorkflowTechnology.NODE,
         technologies=("Node.js", "Express"),
         source_directories=("src/", "tests/"),
         setup_commands=_NODE_SETUP,

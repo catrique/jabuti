@@ -2,21 +2,15 @@
 
 from collections.abc import Iterable
 
-from jabuti.deployment.model import DeploymentTarget
 from jabuti.project.config import Backend, Database, MigrationStrategy, ProjectType
-from jabuti.project.planner import (
-    ROOT_DIRECTORY,
-    WORKFLOWS_DIRECTORY,
-    ComponentPlan,
-    ProjectPlan,
-)
+from jabuti.project.planner import ROOT_DIRECTORY, ComponentPlan, ProjectPlan
 
 _ARCHITECTURE = {
     ProjectType.FRONTEND: "The application is frontend-only. It has no backend "
     "or database access.",
     ProjectType.API: "The application is a standalone API.",
     ProjectType.FULLSTACK: "Frontend and backend are independent applications "
-    "in the same repository, built and deployed separately.",
+    "in the same repository, built and run separately.",
     ProjectType.WEB_APP: "The application is a single server-side web app: the "
     "backend renders the HTML templates and serves the static files.",
 }
@@ -110,42 +104,3 @@ def migration_components(components: Iterable[ComponentPlan]) -> list[ComponentP
     """Components with a migration mechanism."""
     return [c for c in components if c.migrations is not MigrationStrategy.NONE]
 
-
-DEPLOY_VARIABLES_LOCATION = (
-    "**Settings → Secrets and variables → Actions → Variables**"
-)
-DEPLOY_VARIABLES = (
-    (
-        "DEPLOY_ROOT",
-        "Required. Base directory where the applications are published on the "
-        "server. It must be an existing absolute path; the workflows fail "
-        "without it and never fall back to a default.",
-    ),
-    (
-        "DEPLOY_USER",
-        "Optional. User that owns the PM2 processes. Leave it empty when the "
-        "runner already runs as the correct user.",
-    ),
-)
-
-
-def deploy_variable_lines() -> list[str]:
-    """GitHub Actions Variables read by the generated workflows."""
-    return [f"`{name}`: {description}" for name, description in DEPLOY_VARIABLES]
-
-
-def deployment_lines(target: DeploymentTarget) -> list[str]:
-    """Workflow variables and server destination of a deployment target."""
-    lines = [
-        f"Workflow: `{(WORKFLOWS_DIRECTORY / target.deploy_workflow).as_posix()}`",
-        f"APP: `{target.app_name}`",
-        f"SRC: `{target.source}`",
-        f"TIPO: `{target.technology}`",
-    ]
-    if target.angular_output:
-        lines.append(f"OUT: `{target.angular_output}`")
-    lines.append(f"Server path: `{target.server_path}`")
-    if target.migrations_workflow:
-        workflow = (WORKFLOWS_DIRECTORY / target.migrations_workflow).as_posix()
-        lines.append(f"Migrations: `{workflow}` (manual, workflow_dispatch)")
-    return lines

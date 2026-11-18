@@ -1,18 +1,11 @@
-"""Plan where each component lives and how it is published."""
+"""Plan where each component of a project lives."""
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from jabuti.deployment.model import (
-    DeploymentScope,
-    DeploymentTarget,
-    WorkflowTechnology,
-    separated_backend_app_name,
-)
 from jabuti.project.config import (
     Database,
     Framework,
-    Frontend,
     MigrationStrategy,
     ProjectConfig,
     Topology,
@@ -21,7 +14,8 @@ from jabuti.project.config import (
 from jabuti.project.stacks import Stack, stack_for
 
 ROOT_DIRECTORY = "."
-WORKFLOWS_DIRECTORY = Path(".github", "workflows")
+FRONTEND_DIRECTORY = "frontend"
+BACKEND_DIRECTORY = "backend"
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +28,6 @@ class ComponentPlan:
     serves_frontend: bool
     database: Database
     migrations: MigrationStrategy
-    deployment: DeploymentTarget
 
     @property
     def stack(self) -> Stack:
@@ -44,7 +37,7 @@ class ComponentPlan:
 
 @dataclass(frozen=True, slots=True)
 class ProjectPlan:
-    """Repository layout and deployments calculated for a project."""
+    """Repository layout calculated for a project."""
 
     config: ProjectConfig
     components: tuple[ComponentPlan, ...]
@@ -72,20 +65,15 @@ def plan_project(config: ProjectConfig) -> ProjectPlan:
     """Calculate the project layout without touching the filesystem."""
     if config.topology is Topology.SEPARATED:
         components = (
-            _plan_frontend(config, DeploymentScope.FRONTEND),
-            _plan_backend(config, DeploymentScope.BACKEND),
+            _plan_frontend(config, FRONTEND_DIRECTORY),
+            _plan_backend(config, BACKEND_DIRECTORY),
         )
     elif config.frontend is not None:
-        components = (_plan_frontend(config),)
+        components = (_plan_frontend(config, ROOT_DIRECTORY),)
     else:
-        components = (_plan_backend(config),)
+        components = (_plan_backend(config, ROOT_DIRECTORY),)
 
     return ProjectPlan(config=config, components=components)
-
-
-def angular_output_directory(project_name: str) -> str:
-    """Build output of an Angular project, relative to its directory."""
-    return f"dist/{project_name}/browser"
 
 
 def component_directory(component: ComponentPlan, project_root: Path) -> Path:
@@ -115,26 +103,9 @@ def create_project_structure(
     return target
 
 
-def _plan_frontend(
-    config: ProjectConfig,
-    scope: DeploymentScope | None = None,
-) -> ComponentPlan:
+def _plan_frontend(config: ProjectConfig, directory: str) -> ComponentPlan:
     frontend = config.frontend
     assert frontend is not None
-    directory = scope.value if scope else ROOT_DIRECTORY
-    technology = stack_for(frontend).technology
-    output = (
-        angular_output_directory(config.name)
-        if frontend is Frontend.ANGULAR
-        else None
-    )
-    deployment = DeploymentTarget(
-        app_name=config.name,
-        source=directory,
-        technology=technology,
-        scope=scope,
-        angular_output=output,
-    )
     return ComponentPlan(
         project_name=config.name,
         framework=frontend,
@@ -142,33 +113,17 @@ def _plan_frontend(
         serves_frontend=False,
         database=Database.NONE,
         migrations=MigrationStrategy.NONE,
-        deployment=deployment,
     )
 
 
-def _plan_backend(
-    config: ProjectConfig,
-    scope: DeploymentScope | None = None,
-) -> ComponentPlan:
+def _plan_backend(config: ProjectConfig, directory: str) -> ComponentPlan:
     backend = config.backend
     assert backend is not None
-    directory = scope.value if scope else ROOT_DIRECTORY
-    app_name = separated_backend_app_name(config.name) if scope else config.name
-    serves_frontend = config.topology is Topology.BACKEND_SERVES_FRONTEND
-    technology: WorkflowTechnology = stack_for(backend).technology
-    deployment = DeploymentTarget(
-        app_name=app_name,
-        source=directory,
-        technology=technology,
-        scope=scope,
-        migrations=config.migrations,
-    )
     return ComponentPlan(
         project_name=config.name,
         framework=backend,
         directory=directory,
-        serves_frontend=serves_frontend,
+        serves_frontend=config.topology is Topology.BACKEND_SERVES_FRONTEND,
         database=config.database,
         migrations=config.migrations,
-        deployment=deployment,
     )
