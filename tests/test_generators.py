@@ -157,6 +157,53 @@ def test_fullstack_frontend_and_backend_know_each_other(
     assert (root / "backend" / CQRS_EXPRESS).is_file()
 
 
+@pytest.mark.parametrize(
+    "config",
+    [
+        api(
+            Backend.FASTAPI,
+            database=Database.MYSQL,
+            migrations=MigrationStrategy.ALEMBIC,
+        ),
+        ProjectConfig(
+            "portal",
+            ProjectType.WEB_APP,
+            backend=Backend.FLASK,
+            database=Database.MYSQL,
+            migrations=MigrationStrategy.ALEMBIC,
+        ),
+    ],
+)
+def test_python_documentation_uses_cross_platform_venv_commands(
+    config: ProjectConfig,
+    generate: Callable[[ProjectConfig], Path],
+) -> None:
+    files = generated_files(generate(config))
+
+    for name in ("README.md", "AGENTS.md"):
+        content = files[name]
+        assert "python3 -m venv .venv" in content
+        assert "source .venv/bin/activate" in content
+        assert "py -m venv .venv" in content
+        assert r".venv\Scripts\Activate.ps1" in content
+        assert r".venv\Scripts\activate.bat" in content
+        assert "python -m pip install -r requirements.txt" in content
+        assert "python -m pytest" in content
+        assert "python -m alembic current" in content
+        assert ".venv/bin/python" not in content
+        assert ".venv\\Scripts\\python.exe" not in content
+
+
+def test_express_documentation_does_not_claim_migrations(
+    generate: Callable[[ProjectConfig], Path],
+) -> None:
+    files = generated_files(generate(api(Backend.EXPRESS, database=Database.MYSQL)))
+
+    assert "migrar" not in files["README.md"]
+    assert "migrar" not in files["AGENTS.md"]
+    assert "## Migrations" not in files["README.md"]
+
+
 @pytest.fixture
 def cqrs(
     generate: Callable[[ProjectConfig], Path],

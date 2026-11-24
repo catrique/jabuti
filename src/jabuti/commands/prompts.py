@@ -36,7 +36,6 @@ _BACKEND_MESSAGES = {
     ProjectType.WEB_APP: "Framework:",
 }
 # Migrations are offered only where the scaffold creates a working mechanism.
-# Express has no migration library yet, so `npm run migrar` is not offered.
 _OFFERED_MIGRATIONS = {
     Backend.FASTAPI: MigrationStrategy.ALEMBIC,
     Backend.FLASK: MigrationStrategy.ALEMBIC,

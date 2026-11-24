@@ -64,7 +64,6 @@ class MigrationStrategy(StrEnum):
 
     NONE = "Nenhuma"
     ALEMBIC = "Alembic"
-    NPM_SCRIPT = "npm run migrar"
 
 
 Framework = Frontend | Backend
@@ -81,7 +80,6 @@ BACKENDS_BY_PROJECT_TYPE: dict[ProjectType, tuple[Backend, ...]] = {
 MIGRATIONS_BY_BACKEND: dict[Backend, tuple[MigrationStrategy, ...]] = {
     Backend.FASTAPI: (MigrationStrategy.ALEMBIC,),
     Backend.FLASK: (MigrationStrategy.ALEMBIC,),
-    Backend.EXPRESS: (MigrationStrategy.NPM_SCRIPT,),
 }
 
 PROJECT_TYPES_WITH_FRONTEND = frozenset({ProjectType.FRONTEND, ProjectType.FULLSTACK})

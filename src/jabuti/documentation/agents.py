@@ -20,11 +20,13 @@ from jabuti.documentation.markdown import (
     migration_commands,
     migration_components,
     numbered,
+    python_environment_setup,
     section,
     technology_lines,
 )
-from jabuti.project.config import MigrationStrategy, Topology
+from jabuti.project.config import Topology
 from jabuti.project.planner import ProjectPlan
+from jabuti.project.stacks import Runtime
 
 _DEVELOPMENT_RULES = (
     "Preserve the existing architecture.",
@@ -120,13 +122,20 @@ def _has_frontend(plan: ProjectPlan) -> bool:
 
 def _commands(plan: ProjectPlan) -> str:
     if len(plan.components) == 1:
-        commands = command_lines(plan.components[0])
-        return section("Development commands", code_block(commands))
+        component = plan.components[0]
+        blocks = []
+        if component.stack.runtime is Runtime.PYTHON:
+            blocks.append(python_environment_setup(component))
+        blocks.append(code_block(command_lines(component)))
+        return section("Development commands", *blocks)
 
-    blocks = [
-        section(component_title(c), code_block(command_lines(c)), level=3)
-        for c in plan.components
-    ]
+    blocks = []
+    for component in plan.components:
+        component_blocks = []
+        if component.stack.runtime is Runtime.PYTHON:
+            component_blocks.append(python_environment_setup(component))
+        component_blocks.append(code_block(command_lines(component)))
+        blocks.append(section(component_title(component), *component_blocks, level=3))
     return section("Development commands", *blocks)
 
 
@@ -170,13 +179,9 @@ def _migrations(plan: ProjectPlan) -> str | None:
         return None
 
     component = components[0]
-    mechanism = (
-        "Alembic" if component.migrations is MigrationStrategy.ALEMBIC
-        else "`npm run migrar`"
-    )
     return section(
         "Migrations",
-        f"{mechanism} is the only supported mechanism for schema changes.",
+        "Alembic is the supported mechanism for schema changes.",
         code_block(migration_commands(component)),
         "Do not modify the production schema manually. Review migrations before "
         "applying them.",

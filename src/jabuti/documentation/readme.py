@@ -12,6 +12,7 @@ from jabuti.documentation.markdown import (
     location,
     migration_commands,
     migration_components,
+    python_environment_setup,
     section,
     technology_lines,
 )
@@ -69,17 +70,21 @@ def _architecture(plan: ProjectPlan) -> str:
 
 def _running(plan: ProjectPlan) -> str:
     if len(plan.components) == 1:
-        blocks = [code_block(command_lines(plan.components[0]))]
+        component = plan.components[0]
+        blocks = []
+        if component.stack.runtime is Runtime.PYTHON:
+            blocks.append(python_environment_setup(component))
+        blocks.append(code_block(command_lines(component)))
     else:
-        blocks = [
-            section(component_title(c), code_block(command_lines(c)), level=3)
-            for c in plan.components
-        ]
-
-    if any(c.stack.runtime is Runtime.PYTHON for c in plan.components):
-        blocks.append(
-            "On Windows, use `.venv\\Scripts\\python` instead of `.venv/bin/python`."
-        )
+        blocks = []
+        for component in plan.components:
+            component_blocks = []
+            if component.stack.runtime is Runtime.PYTHON:
+                component_blocks.append(python_environment_setup(component))
+            component_blocks.append(code_block(command_lines(component)))
+            blocks.append(
+                section(component_title(component), *component_blocks, level=3)
+            )
     return section("Running locally", *blocks)
 
 

@@ -9,8 +9,7 @@ O valor não está em chamar `npm create vite` ou `ng new`, e sim no que vem
 junto: uma arquitetura simples e explícita, documentada para que pessoas e
 agentes de IA continuem o projeto do mesmo jeito.
 
-O Jabuti não gera arquivos de deploy nem configura infraestrutura. Ferramentas
-do sistema são verificadas, nunca instaladas.
+Ferramentas do sistema são verificadas, nunca instaladas.
 
 ## Instalação
 

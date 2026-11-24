@@ -27,8 +27,6 @@ Este arquivo orienta agentes de código que trabalham no repositório Jabuti.
 - Templates são recursos do pacote (`src/jabuti/templates/`), lidos com
   `importlib.resources`; nunca dependa de caminhos do repositório.
 - O planner é a fonte de verdade dos diretórios de cada componente.
-- O Jabuti não gera arquivos de deploy, workflows de deploy/migrations nem
-  qualquer configuração de servidor ou infraestrutura.
 - O Jabuti nunca gera credenciais nem cria `.env` real.
 - Migrations são apenas locais (Alembic) e nunca executam automaticamente.
 - Projetos gerados usam Lightweight CQRS: as primitivas (Command, Query,

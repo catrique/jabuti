@@ -137,6 +137,36 @@ def test_fullstack_keeps_local_alembic_migrations(
         assert "alembic upgrade head" in content
 
 
+@pytest.mark.parametrize(
+    ("selections", "command"),
+    [
+        (
+            (ProjectType.API, Backend.FASTAPI, Database.NONE),
+            "python -m uvicorn app.main:app --reload",
+        ),
+        (
+            (ProjectType.WEB_APP, Backend.FLASK, Database.NONE),
+            "python -m flask --app app run --debug",
+        ),
+    ],
+)
+def test_python_success_instructions_use_activated_environment(
+    selections: tuple[StrEnum, ...],
+    command: str,
+    fake_environment: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure_menu_selections(monkeypatch, selections)
+
+    result = runner.invoke(app, ["create"], input="portal\ny\n")
+
+    assert result.exit_code == 0, result.output
+    assert "Ative .venv conforme o README.md" in result.output
+    assert command in result.output
+    assert ".venv/bin/python" not in result.output
+    assert r".venv\Scripts\python.exe" not in result.output
+
+
 def test_frontend_does_not_ask_backend_or_database(
     fake_environment: Path,
     monkeypatch: pytest.MonkeyPatch,

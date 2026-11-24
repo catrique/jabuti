@@ -107,4 +107,11 @@ def _show_success(plan: ProjectPlan) -> None:
         directory = Path(plan.root, component.directory).as_posix()
         typer.echo(f"\nPara iniciar {component.framework}:")
         typer.echo(f"cd {directory}")
-        typer.echo(component.stack.run_command)
+        if component.framework is Backend.FASTAPI:
+            typer.echo("Ative .venv conforme o README.md e execute:")
+            typer.echo("python -m uvicorn app.main:app --reload")
+        elif component.framework is Backend.FLASK:
+            typer.echo("Ative .venv conforme o README.md e execute:")
+            typer.echo("python -m flask --app app run --debug")
+        else:
+            typer.echo(component.stack.run_command)

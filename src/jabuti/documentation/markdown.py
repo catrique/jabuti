@@ -10,6 +10,7 @@ from jabuti.project.config import (
     ProjectType,
 )
 from jabuti.project.planner import ROOT_DIRECTORY, ComponentPlan, ProjectPlan
+from jabuti.project.stacks import Runtime
 
 _ARCHITECTURE = {
     ProjectType.FRONTEND: "The application is frontend-only. It has no backend "
@@ -21,10 +22,9 @@ _ARCHITECTURE = {
     "backend renders the HTML templates and serves the static files.",
 }
 
-ALEMBIC_REVISION ='.venv/bin/python -m alembic revision --autogenerate -m "descricao"'
-ALEMBIC_UPGRADE = ".venv/bin/python -m alembic upgrade head"
-ALEMBIC_CURRENT = ".venv/bin/python -m alembic current"
-NODE_MIGRATION = "npm run migrar"
+ALEMBIC_REVISION = 'python -m alembic revision --autogenerate -m "descricao"'
+ALEMBIC_UPGRADE = "python -m alembic upgrade head"
+ALEMBIC_CURRENT = "python -m alembic current"
 
 
 def architecture_description(plan: ProjectPlan) -> str:
@@ -77,8 +77,48 @@ def component_title(component: ComponentPlan) -> str:
 def command_lines(component: ComponentPlan) -> list[str]:
     """Commands to set up, run and check a component from the repository root."""
     stack = component.stack
-    commands = [*stack.setup_commands, stack.run_command, *stack.check_commands]
+    if stack.runtime is Runtime.PYTHON:
+        run_command = {
+            Backend.FASTAPI: "python -m uvicorn app.main:app --reload",
+            Backend.FLASK: "python -m flask --app app run --debug",
+        }[component.framework]
+        commands = [
+            "python -m pip install -r requirements.txt",
+            run_command,
+            "python -m pytest",
+        ]
+    else:
+        commands = [*stack.setup_commands, stack.run_command, *stack.check_commands]
     return _from_root(component, commands)
+
+
+def python_environment_setup(component: ComponentPlan) -> str:
+    """Cross-platform instructions for creating and activating a Python venv."""
+    prefix = [] if component.directory == ROOT_DIRECTORY else [
+        f"cd {component.directory}"
+    ]
+    options = (
+        (
+            "Linux/macOS",
+            "bash",
+            ["python3 -m venv .venv", "source .venv/bin/activate"],
+        ),
+        (
+            "Windows PowerShell",
+            "powershell",
+            ["py -m venv .venv", r".venv\Scripts\Activate.ps1"],
+        ),
+        (
+            "Windows CMD",
+            "batch",
+            ["py -m venv .venv", r".venv\Scripts\activate.bat"],
+        ),
+    )
+    blocks = [
+        f"**{label}**\n\n{code_block([*prefix, *commands], language)}"
+        for label, language, commands in options
+    ]
+    return "\n\n".join(blocks)
 
 
 def migration_commands(component: ComponentPlan) -> list[str]:
@@ -87,8 +127,6 @@ def migration_commands(component: ComponentPlan) -> list[str]:
         return _from_root(
             component, [ALEMBIC_REVISION, ALEMBIC_UPGRADE, ALEMBIC_CURRENT]
         )
-    if component.migrations is MigrationStrategy.NPM_SCRIPT:
-        return _from_root(component, [NODE_MIGRATION])
     return []
 
 
