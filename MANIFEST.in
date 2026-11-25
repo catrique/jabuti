@@ -1,0 +1,2 @@
+# Keep repository documentation tests runnable from the source distribution.
+include skills/jabuti/SKILL.md

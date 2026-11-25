@@ -1,27 +1,71 @@
 # Jabuti
 
-Jabuti é um CLI que cria projetos de software prontos para crescer: frontends,
-APIs, projetos fullstack e aplicações web, já com estrutura consistente,
-**Lightweight CQRS**, camada de API organizada, `README.md`, `AGENTS.md` e
-`.gitignore`. Quando há backend, MySQL e migrations com Alembic são opcionais.
-
-O valor não está em chamar `npm create vite` ou `ng new`, e sim no que vem
-junto: uma arquitetura simples e explícita, documentada para que pessoas e
-agentes de IA continuem o projeto do mesmo jeito.
-
-Ferramentas do sistema são verificadas, nunca instaladas.
+Jabuti é uma CLI opinativa para iniciar projetos organizados e preparados para
+evoluir com desenvolvedores e agentes de IA. Gera frontends, APIs, projetos
+fullstack e aplicações web com **Lightweight CQRS** e um `AGENTS.md` que orienta
+o desenvolvimento.
 
 ## Instalação
 
-Requer Python 3.11 ou superior.
+### CLI
 
 ```bash
 pip install jabuti
-# ou
-pipx install jabuti
 ```
 
-## Uso
+Depois:
+
+```bash
+jabuti create
+```
+
+Requer Python 3.11 ou superior. Para uma CLI isolada, use `pipx install jabuti`.
+
+### Skill para Claude Code e Codex
+
+```bash
+npx skills add catrique/jabuti --skill jabuti -a claude-code -a codex -g -y
+```
+
+Depois, no Claude Code ou Codex, peça:
+
+> Use o Jabuti para criar um projeto fullstack com React, FastAPI, MySQL e Alembic.
+
+Para instalar somente no **Claude Code**:
+
+```bash
+npx skills add catrique/jabuti --skill jabuti -a claude-code -g -y
+```
+
+Para instalar somente no **Codex**:
+
+```bash
+npx skills add catrique/jabuti --skill jabuti -a codex -g -y
+```
+
+O comando usa o [`npx skills`](https://github.com/vercel-labs/skills), que requer
+Node.js 22.20+ e npm/npx. A skill é distribuída por este repositório GitHub,
+independentemente da CLI Python, que também precisa estar instalada.
+
+A instalação global (`-g`) permite usar a skill para criar vários projetos.
+Para instalá-la apenas no projeto atual, execute dentro dele, sem `-g`:
+
+```bash
+npx skills add catrique/jabuti --skill jabuti -a codex -y
+```
+
+## Exemplo rápido
+
+Na CLI, execute `jabuti create` e escolha nome, tipo, frameworks e, quando
+aplicável, banco e migrations usando as setas e Enter. O comando é interativo.
+Com a skill instalada, você também pode pedir ao agente:
+
+> Use o Jabuti para criar um projeto fullstack com React e FastAPI.
+
+Após a geração, o agente deve ler o `AGENTS.md` criado antes de escrever código.
+Esse arquivo é a fonte principal de arquitetura e convenções do novo projeto.
+
+Outros comandos:
 
 ```bash
 jabuti doctor     # verifica Python, Node.js, npm e Git, sem alterar nada
@@ -30,9 +74,7 @@ jabuti version
 jabuti --help
 ```
 
-### `jabuti create`
-
-Pergunta só o que é relevante para o tipo escolhido:
+## Stacks suportadas
 
 | Tipo | Opções | Estrutura |
 | --- | --- | --- |
@@ -47,20 +89,20 @@ Pergunta só o que é relevante para o tipo escolhido:
 - **Migrations:** Alembic local para FastAPI e Flask com MySQL
   (`alembic revision --autogenerate`, `alembic upgrade head`). Nada roda
   automaticamente.
+- **Express:** sem migrations geradas.
 - **Fullstack:** o frontend já aponta para a URL local do backend e o backend
   aceita chamadas do navegador vindas do frontend (`FRONTEND_ORIGINS`).
 
-### `jabuti doctor`
+## Como funciona
 
-Diagnostica o ambiente local sem alterar nada e diz quais stacks podem ser
-criadas, usando as mesmas regras de versão do `jabuti create`. Retorna código 1
-quando algo está ausente ou incompatível.
+O Jabuti apresenta o plano para confirmação, verifica as ferramentas necessárias
+e gera o projeto em um novo diretório com o nome escolhido. Destinos existentes
+são recusados. Os geradores instalam as dependências do projeto usando as
+ferramentas disponíveis; ferramentas do sistema nunca são instaladas.
 
-| Stack | Precisa de |
-| --- | --- |
-| React, Express | Node.js 20.19+ ou 22.12+ e npm |
-| Angular | Node.js 22.22.3+ ou 24.15+ e npm (CLI oficial via `npm exec`) |
-| FastAPI, Flask | Python 3.10+ (cada projeto recebe sua própria `.venv`) |
+Cada projeto recebe `README.md`, `AGENTS.md` e `.gitignore`. A
+[skill oficial](skills/jabuti/SKILL.md) orienta o agente a operar a CLI; o
+`AGENTS.md` gerado orienta a evolução da aplicação.
 
 ## Arquitetura gerada
 
@@ -70,17 +112,22 @@ páginas e componentes cuidam apenas do seu papel e delegam o comportamento da
 aplicação para Commands e Queries. Não há mediator, bus, repository genérico
 nem camadas extras; elas só surgem se o projeto precisar.
 
-| Stack | O que é gerado |
-| --- | --- |
-| FastAPI, Flask | `app/application/cqrs/` (Command, Query, handlers sync/async, results, `ErrorCode`), `app/http.py` (mapeia `ErrorCode` para HTTP), `app/infrastructure/database.py` com MySQL |
-| Express | `src/application/cqrs/` (mesmos conceitos, com `async/await`), `src/http.js`, `src/infrastructure/database.js` com MySQL |
-| React | `src/application/cqrs.ts`, `src/infrastructure/api/` (`ApiClient` sobre `fetch`, URL via `VITE_API_BASE_URL`) |
-| Angular | `src/app/application/cqrs.ts`, `src/app/infrastructure/api/` (`ApiClient` sobre `HttpClient`/`Observable`), `src/environments/` |
-
 O núcleo CQRS não conhece framework, HTTP nem banco. O projeto nasce sem
 domínio de exemplo: módulos (`modules/<domínio>/commands`, `queries`) são
 criados quando a primeira funcionalidade é pedida, como descrito no `AGENTS.md`
 gerado.
+
+## Doctor
+
+`jabuti doctor` diagnostica o ambiente local sem alterar nada e diz quais stacks
+podem ser criadas, usando as mesmas regras de versão do `jabuti create`.
+Retorna código 1 quando algo está ausente ou incompatível.
+
+| Stack | Precisa de |
+| --- | --- |
+| React, Express | Node.js 20.19+ ou 22.12+ e npm |
+| Angular | Node.js 22.22.3+ ou 24.15+ e npm (CLI oficial via `npm exec`) |
+| FastAPI, Flask | Python 3.10+ (cada projeto recebe sua própria `.venv`) |
 
 ## Desenvolvimento do Jabuti
 
@@ -97,8 +144,8 @@ python -m pip install -e .
 Antes de cada commit:
 
 ```bash
-ruff check .
-pytest
+python -m pytest
+python -m ruff check .
 python -m pip check
 python -m build
 ```

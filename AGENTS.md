@@ -36,6 +36,9 @@ Este arquivo orienta agentes de código que trabalham no repositório Jabuti.
   crescimento fica no `AGENTS.md` gerado (`documentation/architecture.py`).
 - Subprocessos usam lista de argumentos, sem shell e sem `os.system`.
 - Testes focam comportamentos críticos; evite testes de baixo valor.
+- `skills/jabuti/SKILL.md` é a Agent Skill oficial. Ao alterar comandos, opções
+  ou stacks do Jabuti, revisar também a Agent Skill para mantê-la sincronizada
+  com o comportamento real da CLI.
 
 ## Fluxo de trabalho com Git
 
